@@ -2,8 +2,10 @@
 
 from .adapters import as_member
 from .members import Members
-from .patterns import Parallel, Router, Sequential
+from .patterns import Loop, Parallel, Router, Sequential
 from .protocols import Pattern, TeamMember
 from .team import Team
 
-__all__ = ["Members", "Parallel", "Pattern", "Router", "Sequential", "Team", "TeamMember", "as_member"]
+__all__ = [
+    "Loop", "Members", "Parallel", "Pattern", "Router", "Sequential", "Team", "TeamMember", "as_member"
+]

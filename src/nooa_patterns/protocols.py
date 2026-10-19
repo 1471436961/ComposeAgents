@@ -23,11 +23,24 @@ class TeamMember(Protocol):
     按成员顺序返回新 list；元素是原业务结果，保留 None、嵌套列表和对象身份，不展开。
     该列表本身是此次 Team 调用的聚合业务结果，下游须能接收该形状。
 
+    Loop(until, *, max_iterations) 的成员由 Team 持有，不要求命名；映射成员仍按顺序执行。
+    max_iterations 必须显式给出正整数，非整数或 bool 抛 TypeError，零或负数抛 ValueError。
+    首轮接收入口 task，之后接收上一轮末结果；每轮完整执行全部成员后判断一次 until，至少一轮。
+    until 应是纯函数式同步判断，不应调用 LLM 或做 I/O；模型判断由本轮异步成员完成。
+    until 返回必须是 bool，否则 TypeError，不进行隐式真值转换。None 仍作为普通结果参与判断和反馈。
+    最后一轮 until 为 True 是正常终止；满上限仍 False 时返回末结果，不抛耗尽异常或包装状态。
+    跨轮类型兼容由应用负责，推荐显式加入末尾反馈转换成员；库没有 feedback_adapter，也不自动转换。
+
     context 是调用者创建、持有和管理的任意应用级对象。
     所有成员收到同一个引用，修改彼此可见。库不复制、不持久化，
     不注入 last_result、history 或原始任务；成员和显式适配函数可以主动修改它。
     它与 NOOA agent.context（提示词上下文）无关，不自动同步。
     Parallel 不保护 task/context 的并发读写，调用者负责并发安全；同一成员的重入也由调用者负责。
+    Loop 也不自动写 loop_exhausted 或任何其他字段，不累积历史，不提供 on_exhausted 回调。
+    耗尽属于应用语义，固定字段在嵌套 / 重复调用中没有通用的覆盖和清除规则。
+    应用可每次新建 until 观察闭包记录 rounds、last_ok，正常返回后计算
+    exhausted = (rounds == max_iterations and not last_ok)；闭包属于应用，不跨独立并发运行共享。
+    观察计数不改变纯业务判定；异常 / 取消直接传播，不执行正常返回后的耗尽计算。
 
     叶子与 Team 都返回自身此次调用的业务结果，处于同一成员调用边界，
     不要求相同 Python 类型、数据形状或任务粒度。Pattern 决定业务结果如何产生，
@@ -45,6 +58,7 @@ class TeamMember(Protocol):
     已经完成的成员不会被追溯取消；只管理等待链，不接管成员自行创建的后台任务。
     快速失败指及时请求取消，不承诺立即返回；取消清理可能等待，额外的外层取消仍可传播。
     库不重试整个流程；成员或 NOOA 策略自身的重试仍按原机制执行。
+    Loop 中成员失败即停止当前轮，until 失败时不进入下一轮，原异常 / 取消直接传播，不记为耗尽。
     失败或取消不回滚 context、输入、Agent 状态及已经发生的外部副作用。
     库不能强制中断阻塞或屏蔽取消的成员，仅管理直接等待的调用链。
     首版不内置超时；调用者可在外层或显式适配函数中限制等待时间。
@@ -65,6 +79,7 @@ class TeamMember(Protocol):
     空 Team 在构造时抛出 ValueError；Pattern 的成员序列前提为非空。
     单成员 Sequential 原样返回该成员的结果；单成员 Parallel 返回单元素列表。
     直接 Parallel.run 也对空成员抛 ValueError，不改变 Sequential 对直接空序列不作保证的边界。
+    直接 Loop.run 也对空成员抛 ValueError；max_iterations 限制轮数，不保证总耗时。
 
     Router 的 selector 是 Callable[[Any, Any], str]，每次同步调用一次，选择一个名称。
     selector 应是纯函数式的同步决策，不应调用 LLM 或做 I/O；模型决策应由前置异步成员完成，
@@ -94,9 +109,10 @@ class Pattern(Protocol):
     本协议提供 run，不是 TeamMember 的子类型；仅实现 run 不满足成员的 execute 协议。
     Team 的 execute 委托 run 并直接返回业务结果，Pattern 自身不因此成为 Team 成员。
 
-    Pattern 必须无执行状态并可复用。同一 Sequential、Parallel 或 Router 可被多个 Team 共享。
+    Pattern 必须无执行状态并可复用。同一 Sequential、Parallel、Router 或 Loop 可被多个 Team 共享。
     当前输入、进度、临时结果、异常不得保存到实例字段或其他共享可变存储。
-    固定配置应与执行状态区分；Router 保存 selector，不保存本次选择或结果。
+    固定配置应与执行状态区分；Router 保存 selector，Loop 保存 until / max_iterations。
+    本次选择、轮次和结果只在调用局部变量中；库不重置应用的闭包或成员状态。
     无状态是实现者的约定，Protocol 不会自动验证它。
 
     members 是非空 Members，保存构造时的浅快照，按原顺序迭代成员并保留成员引用。
@@ -111,6 +127,8 @@ class Pattern(Protocol):
     未完成兄弟任务，传播原失败或 CancelledError。并发修改与成员重入安全属于调用者。
     Router 用同步 selector 选一个名称，按 TeamMember 中的完整路由契约调用一个成员；
     直接 run 也要求非空命名 Members，不改变 Team 构造时提前检查的职责。
+    Loop 遵守 TeamMember 中的完整循环契约，逐轮执行 Sequential，再检查同步 bool 判断；
+    末结果原样反馈，不自动转换、写 context 或添加记录回调，耗尽由应用观察。
 
     Pattern 控制成员之间的协作，NOOA Strategy 控制单个生成方法的执行。
     """
