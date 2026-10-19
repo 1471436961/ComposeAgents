@@ -1,7 +1,7 @@
 # 实施计划与验收基线：M0–M7
 
 本文件是项目唯一维护的实施计划，统一记录 M0–M7 的范围、契约决定、验证证据与阶段确认规则。
-当前 **M5：Parallel 已通过本地验证与 reviewer 技术复审，用户已指示提交推送**；交付记录见 §9.10，Router、Loop 只规划，不提前实现。
+当前 **M6：Members、构造时命名检查、Router 与评审案例已通过本地验证和 reviewer 技术复审，用户已指示提交推送**，交付记录见 §10.8。M7 Loop 尚未授权。
 
 本文件将已由用户确认的设计、M1–M7 实施任务和阶段确认规则落盘，供没有聊天上下文的
 实现者与 reviewer 使用。它记录实施范围，不表示后续里程碑已经获准开始。
@@ -63,7 +63,7 @@ Blackboard、ContractNet、Negotiation 不做。领域角色留待未来应用�
 | context | 调用者持有，同一活引用；库不复制、不注入、不持久化，失败不回滚；与 NOOA `agent.context` 无关且不自动同步。 |
 | 返回值 | Team 与叶子返回同一成员调用边界上的业务结果，不要求同一类型；子 Team 输出仍须兼容外层下一成员。 |
 | Pattern | 无每次执行的可变状态，可跨 Team 复用；不将进度、当前输入或临时结果保存为字段或其他共享状态。 |
-| 其他边界 | `None` 为普通结果；空 Team 构造时报 `ValueError`；成员序列取 tuple 快照但成员保持引用；不内置超时、不重试整个流程、不回滚副作用、不承诺同一 Team 并发安全。 |
+| 其他边界 | `None` 为普通结果；空 Team 构造时报 `ValueError`；序列 / 映射统一为 Members 浅快照（M6 扩展），成员保持引用；不内置超时、不重试整个流程、不回滚副作用、不承诺同一 Team 并发安全。 |
 | 递归与资源 | 子 Team 保留自己的 Pattern；不支持无限自调用；不做完整图校验；资源生命周期归调用者。 |
 
 README 将完整契约按 13 个主题组织，覆盖任务书中的 15 个要点。
@@ -81,8 +81,8 @@ README 将完整契约按 13 个主题组织，覆盖任务书中的 15 个要�
 | M2 | 适配器 + Sequential | 已通过技术复审与补充测试；按用户要求分三次提交并推送，见 §6.7；用户已确认进入 M3 |
 | M3 | Team 容器 | 已通过本地验证与 reviewer 技术复审；已分次提交并推送，远程已核验，见 §7.6 |
 | M4 | 组合示例 + 等价测试 + NOOA 集成 | 已通过复审并分三次提交推送，远程 main 已核验为 536fbcb；历史证据见 §8.9 |
-| M5 | 设计 + Parallel | 已通过本地验证与 reviewer 技术复审，无阻塞项；用户已指示提交推送，见 §9.8–9.10；M6 尚未授权 |
-| M6 | Router；聚合后的专业审查选择及手写对照 | 只规划，等待 M5 汇报后的用户确认；见 §10 |
+| M5 | 设计 + Parallel | 已通过复审并分次提交推送，远程已核验为 2cc65b5；交付见 §9.10；用户已确认进入 M6 |
+| M6 | Members、声明式命名检查、Router 与专业审查案例 | 已通过本地验证和 reviewer 技术复审，无阻塞项；用户已指示提交推送，见 §10.5–10.8；M7 尚未授权 |
 | M7 | 通用有界 Loop；终止条件与耗尽标记契约 | 只规划，等待 M6 汇报后的用户确认；见 §11 |
 
 M1 的导出基线为 `TeamMember`、`Pattern`；M2 增加 `as_member` 与 `Sequential`，M3 增加 `Team`。
@@ -799,7 +799,7 @@ unshare --net .uv-cache/wsl-venv/bin/python -X utf8 -m pytest -p no:cacheprovide
 #### 9.8.4 当前交付状态
 
 M5 已完成实现与本地验证，并通过 reviewer 技术复审（见 §9.9）；用户随后指示提交推送，交付记录见 §9.10。
-当前必须停在 M5。M6 Router 与 M7 Loop 没有授权实现，后续分别澄清 §10、§11 的接口问题再实施。
+M5 当时停在本阶段等待确认；用户随后授权 M6，见 §10。M7 Loop 仍未授权。
 
 ### 9.9 Reviewer M5 技术复审结论
 
@@ -815,7 +815,7 @@ M5 已完成实现与本地验证，并通过 reviewer 技术复审（见 §9.9�
 
 复审确认 Parallel 的引用、结果顺序、快速失败、取消清理、嵌套与独立复用均符合契约，范围未超出 M5。
 空生成器不属于当前 Sequence 参数契约，无需因此扩大接口；Router / Loop 的未决设计留到各自阶段。
-复审本身不构成提交推送或进入 M6 的授权；用户随后明确指示提交推送，见 §9.10。M6 仍未授权，开始时先澄清 §10 的设计边界。
+复审本身不构成提交推送或进入 M6 的授权；用户随后明确指示提交推送，见 §9.10。后续 M6 的澄清确认与实现授权见 §10。
 
 ### 9.10 M5 分次提交与交付
 
@@ -830,23 +830,144 @@ M5 已完成实现与本地验证，并通过 reviewer 技术复审（见 §9.9�
 提交前核对了变更范围、Python 语法、文档链接和空白；原有 Team / Sequential / 适配器、
 依赖声明、锁文件与 M1 / M4 基线保持不变。代码和测试未在复审后改动，本次未重复运行 pytest；
 实施结果与 reviewer 独立结果分别保留在 §9.8.3、§9.9。
-推送目标为 origin/main，推送后核对本地 HEAD、远程跟踪分支及服务器端 main；最终提交号和推送结果以 Git 与本次交付回复为准。
+已推送 origin/main，交付时核对本地 HEAD、远程跟踪分支与服务器端 main 均为 2cc65b580fb0273e59d0b4aacb2af0f6b0912932，工作树干净。
 
-## 10. M6：Router 的计划与待澄清项（未实现）
+## 10. M6：Members 与 Router
 
-用户草案为 Router(selector: Callable[[task, context], str], members: dict[str, TeamMember])：
-按名称只执行选中成员，未命中 LookupError，无默认分支，结果不包装，空成员构造 ValueError。
-selector 是调用者普通函数，模型决策由应用提供，不内置模型选路。
+用户已确认以下契约并授权实现，现已完成实现、本地验证与 reviewer 技术复审，用户随后指示提交推送，见 §10.8。本阶段只做 Router 所需的成员接口、声明式检查和验收案例；
+不实现 Loop，不改变 Sequential / Parallel 的交接、汇集、失败或取消语义。完成后汇报并停止。
 
-M6 开始前需要澄清：
+### 10.1 成员归属与构造时检查
 
-- members 放在 Router 构造器与现有 Team 持有成员存在双重来源，需要明确归属。
-  固定配置本身不违反 Pattern 无执行状态，但不能模糊结构与协议边界。
-- 普通同步 Callable 返回 str 不能直接 await NOOA 异步决策方法；可由前一步产生决策，
-  再让同步 selector 读取，或明确改变 selector 协议。不能隐式运行事件循环或猜测返回值。
-- 使用§9.6 修正后的完整数据流，并明确模式替换时的业务载体与聚合契约。
+- Team 接受 Sequence[TeamMember] 或 Mapping[str, TeamMember]，统一保存为轻量 Members。
+- Members 支持迭代成员、长度、整数 / 名称访问、has_name(name)；提供只读 names 元组供错误消息列出名称。
+- 对序列或映射取浅快照，保持顺序和成员引用；无增删接口。Team.members 从原 tuple 升级为 Members，
+  这是本阶段明确授权的接口扩展。旧阶段的 tuple 描述与断言作为历史约定保留，不代表 M6 仍返回 tuple。
+- Pattern 声明类属性 requires_named_members: bool = False；Sequential / Parallel 显式声明 False，Router 为 True。
+  Protocol 不给结构类型自动安装默认值；未声明属性的既有自定义 Pattern 按 False 处理，不依据名称或签名猜测。
+- Team 构造时检查声明：要求命名但输入不是 Mapping，立即 ValueError("Router requires named members")；
+  同样声明要求的自定义 Pattern 使用其类名描述错误。空映射 / 空序列仍在构造时拒绝。
+- Pattern.run 的成员标注改为 Members；Sequential / Parallel 执行逻辑保持不变。
 
-M6 单独设计、实施、测试、汇报后停止，不趁 M5 提前写代码。
+### 10.2 Router 执行契约
+
+```python
+Router(selector: Callable[[Any, Any], str])
+async def run(self, members: Members, task: Any, context: Any) -> Any: ...
+Team({"security": ..., "architecture": ..., "quick": ...}, Router(selector))
+```
+
+- selector 应是纯函数式的同步决策，不应调用 LLM 或做 I/O；模型决策由前置异步成员完成，selector 只读其产物。
+- 每次只调用一次 selector，只执行一次选中成员；task / context 原样传给两者，成员结果原样返回，包括 None。
+- selector 抛异常直接传播；未命中抛 LookupError，消息包含返回名称与有序可用名称列表。
+  selector 返回非字符串时抛 TypeError，不把整数当索引、不支持异步 selector 或双协议推断。
+- 不吞异常、不包装、不自动重试、不回滚、不注入 context、不管理资源；取消传到被选成员。
+- 只有 selector 属于固定配置；本次名称和结果仅在局部变量中，同一 Router 可跨独立 Team 复用。
+- 直接调用 run 也要求非空命名 Members；Team 的声明式构造检查仍是正常入口的提前失败保证。
+
+### 10.3 验收案例与契约兼容替换
+
+应用定义 ReviewRequest(proposal, bundle)，不是库级结果封装。数据流为：
+Proposal → Parallel 分析子 Team → 显式普通聚合 → ReviewRequest → Router → 审查意见。
+审查者收到原方案、目标与三份报告；原任务由应用显式桥接携带，库不向 context 自动注入。
+复用 M5 的确定性分析业务，保留纯 await 的手写并发 / 聚合 / 分支对照，覆盖高、中、低风险。
+同一次运行内检查引用，跨运行使用新 context 与有状态成员并比较业务值和事件，不强制并发事件次序。
+
+契约兼容替换：同一组业务成员换 selector，验证分支变化且成员引用不变；
+也验证 Mapping 供 Sequential / Parallel 使用时按映射顺序执行，不把名称作为成员。
+不把 Parallel 换成 Sequential 宣称为等价替换；改变 Pattern 时仍须匹配输入输出契约。
+可选的“Pattern 与下游一起改”语义变更案例不作为本阶段必交付。
+
+### 10.4 实施顺序与验收
+
+1. Members 与 tests/test_members.py：序列 / 映射顺序、名称 / 索引、快照、成员引用及空容器。
+2. Pattern 声明、Team 检查与 Members 委托，迁移原 tuple 形状测试；既有执行语义回归。
+3. Router 与 tests/test_router.py：构造时拒绝未命名、空映射、未命中消息、selector 一次、
+   原引用、结果 / None、异常 / 取消、子 Team、共享 Router 与 selector 替换。
+4. examples/router_review.py 与 tests/test_router_review.py：三风险分支、手写 / 组合隔离对照、
+   原方案和报告引用、递归以及构造错误发生在任何分析副作用之前。
+5. 实际运行定向测试、示例与 Windows 回归；WSL 禁网运行包括 NOOA 集成的全量回归，
+   完整逐项输出保存 docs/validation/M6_PYTEST.txt。结果取得后再记录，不预填通过。
+6. 汇报最终接口、完整测试输出、手写 / 组合对比及 Loop 是否必要的判断；停止等待 review 与用户确认。
+
+### 10.5 实施与本地验证记录
+
+交付 [Members](../src/nooa_patterns/members.py)、[Router](../src/nooa_patterns/patterns/router.py)、
+声明式属性与 Team 检查、导出、完整契约，以及 [评审案例](../examples/router_review.py)。
+原 test_team 的 tuple 形状断言按授权迁移为 Members，其余交接、引用、异常、取消断言保留。
+AST 比较确认 Sequential / Parallel 的 run 执行语句未变，仅调整成员标注、导入和固定类声明。
+
+| 本次实际检查 | 结果 |
+| --- | --- |
+| Members 10 + Router 21 + 案例 7 | `38 passed in 0.18s` |
+| Windows 全量 | `92 passed, 1 skipped in 0.44s`；仍跳过上游 fcntl 限制的 NOOA 模块 |
+| WSL Ubuntu 24.04 / Python 3.12.3 禁网全量 | `95 passed in 27.36s`，无跳过，包含原 NOOA 三项集成 |
+| Windows 示例 | 三种风险均命中预期审查者，手写 / 组合断言通过，退出 0 |
+| WSL 禁网示例 | `unshare --net` 运行 router_review.py，同样通过三风险分支对照，退出 0 |
+| Windows 隔离导入 | `python -I` 导入八个公共名称成功 |
+
+Windows / Python 3.12.14 / pytest 9.1.1 实际命令：
+
+```powershell
+.\.venv\Scripts\python.exe -X utf8 examples\router_review.py
+.\.venv\Scripts\python.exe -X utf8 -m pytest -p no:cacheprovider tests/test_members.py tests/test_router.py tests/test_router_review.py -v
+.\.venv\Scripts\python.exe -X utf8 -m pytest -p no:cacheprovider -v
+```
+
+WSL 全量实际命令（pytest 9.1.1），完整 95 项逐项输出保存在 [M6_PYTEST.txt](validation/M6_PYTEST.txt)：
+
+```bash
+set -o pipefail
+unshare --net .uv-cache/wsl-venv/bin/python -X utf8 -m pytest -p no:cacheprovider -v 2>&1 | tee docs/validation/M6_PYTEST.txt
+```
+
+38 项新增测试覆盖 §10.4 全部条款，另验证自定义命名声明、旧自定义 Pattern 的默认 False、
+非字符串选路、共享 Router 无串扰和完整流水线分析失败时不进入 selector。
+手写 / 组合的三风险测试各自创建新 context、有状态审查成员与分析观察器；
+跨运行比较业务值和事件多重集，运行内部断言原方案、报告、ReviewRequest、context 与返回值身份。
+替换 selector 保留审查成员引用；构造错误发生在分析副作用之前。没有异步 selector 兼容、默认分支或 Loop。
+NOOA 参考目录与既有快照比较，1,500 文件内容与文件集合完全一致；未新增依赖或修改锁文件。
+
+### 10.6 Loop 判断与停止状态
+
+建议保留后续 Loop：Router 只能选择一次分支，不能表达“执行一轮 → 检查结果 → 有界继续”的反馈协调。
+该能力可以先用普通 Python 循环描述，再提取通用有界原语；不是 Router 的失败重试，也不预置 EvaluatorOptimizer。
+M7 实现前仍须确认耗尽标记与“不自动注入任意 context”契约的扩展，以及终止 / 上限边界。
+
+当前停在 M6：已完成实现与本地验证，并通过 reviewer 技术复审（见 §10.7）；用户随后指示提交推送，交付见 §10.8。
+M7 Loop 尚未授权实现，等待用户确认后先澄清 §11 的契约边界。
+
+### 10.7 Reviewer M6 技术复审结论
+
+来源：用户提供的《M6 Review 报告》。结论为 **通过，无 M6 阻塞项**。
+以下是 reviewer 的独立运行记录，与 §10.5 的实施结果分别保留；本次文档更新没有重跑测试或覆盖 M6_PYTEST.txt。
+
+| 验证 | reviewer 报告的结果 |
+| --- | --- |
+| Windows M6 定向 | `38 passed in 0.15s` |
+| Windows 全量 | `92 passed, 1 skipped in 0.28s`；仍为上游 fcntl 平台限制 |
+| WSL 禁网完整回归 | `95 passed in 28.88s`，无跳过 |
+| 示例与导入 | Windows / WSL 三风险评审对照通过；八个公共名称隔离导入成功 |
+
+复审确认成员快照、声明式命名检查、单分支路由、引用、异常 / 取消、递归与案例均符合契约。
+将 Members 快照直接传回 Team 不在当前 Sequence / Mapping 输入承诺内；若后续扩展，须明确名称保留语义。
+直接 run 成功、单名称与异步 selector 拒绝等独立测试建议均为非阻塞项，不自动扩大本阶段范围。
+本次复审本身不构成提交推送或 M7 实现授权；后续用户明确指示提交推送，见 §10.8。M7 仍未授权。
+
+### 10.8 M6 分次提交与交付
+
+用户于 2026-10-19 明确指示“提交并推送”。按职责分三组交付，未开始 M7：
+
+| 分组 | 提交 | 内容 |
+| --- | --- | --- |
+| 成员接口与路由 | `626634d`：`feat: add named member snapshots and routing` | Members、Team / Pattern 声明检查、Router、公共导出和核心测试 |
+| 完整评审案例与证据 | `383480f`：`test(examples): verify routed technical reviews` | router_review.py、7 项案例测试及 M6_PYTEST.txt |
+| 契约、计划与交付文档 | `docs: record M6 acceptance and delivery` | README、AGENTS、唯一实施计划中的契约、实施结果与独立复审记录 |
+
+提交前检查 Python 语法、文档链接、空白、变更范围及原始 95 项通过记录；依赖声明、锁文件、
+适配器、既有示例及 M4 / M5 验证输出保持不变。复审后没有修改代码或测试，本次未重复运行 pytest；
+实施与 reviewer 独立结果分别保留在 §10.5、§10.7。推送目标为 origin/main，推送后核对
+本地 HEAD、远程跟踪分支与服务器端 main；最终提交号及推送结果以 Git 和本次交付回复为准。
 
 ## 11. M7：Loop 的计划与待澄清项（未实现）
 
@@ -857,7 +978,7 @@ M6 单独设计、实施、测试、汇报后停止，不趁 M5 提前写代码�
 
 M7 开始前需要澄清：
 
-- 与 Router 相同的成员归属问题；第 2 轮入口应明确为上一轮末结果。
+- 成员归属应与 M6 的 Members / Team 分工一致，Loop 的构造接口仍待 M7 确认；第 2 轮入口应明确为上一轮末结果。
 - 自动写 loop_exhausted 是对 v0“库不向任意 context 注入字段”的明确扩展；
   任意对象未必能写字段，需明确 context 能力、标记清除/覆盖和嵌套 Loop 相互覆盖的语义。
 - max_iterations 正整数与 bool 边界、最后一轮 until 为真时的耗尽判定、判断函数抛错/取消的行为。

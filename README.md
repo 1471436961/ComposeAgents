@@ -5,7 +5,7 @@ NOOA 之上的轻量协作模式与组合库，工作名暂定 `nooa-patterns`�
 NOOA 负责 Agent 执行、策略、模型调用、对象状态、原生校验和事件历史；
 本项目负责成员调用边界、显式参数桥接与普通 Python 协作逻辑。
 
-## 当前里程碑：M5（Parallel 已通过技术复审，按用户指示交付）
+## 当前里程碑：M6（Members 与 Router 已通过技术复审，按用户指示交付）
 
 M1 提供两个手写顺序流程、`TeamMember` / `Pattern` 协议及基线测试。
 M2 已实现 `as_member` 与 `Sequential`；M3 已实现 `Team`。
@@ -17,17 +17,21 @@ M1–M4 均已通过 reviewer 技术复审，M4 按 Linux / WSL 完整验收基�
 M3 已分次提交并推送，远程提交号已核验；M4 已按用户指示分次提交，交付记录见实施计划 §8.9。
 M5 按授权先记录计划，再完成 Parallel 的设计、实现与验证，详见实施计划 §9。
 M5 定向 22 项通过；WSL 禁网完整回归 57 项通过、无跳过。用户提供的 reviewer 报告结论为通过，无阻塞项；
-独立复审结果见实施计划 §9.9；用户随后指示提交推送，交付记录见 §9.10。当前停在 M5，M6 尚未授权。
-Router、Loop 后续逐个实施，当前只规划；核心只保留四种基础原语，复合协作放未来示例和文档。
+独立复审结果见实施计划 §9.9；M5 已提交推送，交付记录见 §9.10。
+M6 已按确认的契约实现并完成本地验证，定向 38 项、WSL 禁网全量 95 项通过，见 §10。
+用户提供的 M6 reviewer 报告结论为通过、无阻塞项，独立测试结果见实施计划 §10.7。
+用户随后指示提交推送，交付记录见实施计划 §10.8。当前停在 M6，M7 Loop 仍未授权。
+当前只实现 Router 所需的成员支持、选择逻辑和评审案例；核心只保留四种基础原语，复合协作放未来示例和文档。
 
-当前公共导出为 `TeamMember`、`Pattern`、`as_member`、`Sequential`、`Parallel`、`Team`。
+当前公共导出为 `TeamMember`、`Pattern`、`Members`、`as_member`、`Sequential`、`Parallel`、`Router`、`Team`。
 `as_member(fn)` 接受 `(task, context) -> Awaitable[result]` 的显式桥接函数；
 `await Sequential().run(members, task, context)` 逐级交接结果。
 直接调用 Sequential 的 `run` 时，成员非空是调用前提；空序列调用不受支持，行为不保证。
 Parallel 的 `run` 对空序列明确抛出 `ValueError`。
-`Team(members, pattern)` 在构造时拒绝空成员；`members` 是只读的 tuple 快照，成员保持原实例引用。
+`Team(members, pattern)` 接受序列或名称映射，构造时拒绝空成员；`members` 是只读 Members 浅快照，成员保持原实例引用。
 `await team.execute(task, context)` 委托 Pattern，子 Team 保留自己的 Pattern，业务结果原样返回。
 `Team(members, Parallel())` 并发调用成员，按成员顺序返回结果列表；失败/取消时取消并等待未完成成员。
+`Team({"name": member, ...}, Router(selector))` 按同步 selector 返回的名称执行一个成员；非映射输入在构造时拒绝。
 
 ## 核心抽象
 
@@ -46,13 +50,13 @@ Parallel 的 `run` 对空序列明确抛出 `ValueError`。
 Team 的 `execute` 委托以下入口，并直接返回其业务结果：
 
 ```python
-async def run(self, members: Sequence[TeamMember], task: Any, context: Any) -> Any: ...
+async def run(self, members: Members, task: Any, context: Any) -> Any: ...
 # 调用方式：await pattern.run(members, task, context)
 ```
 
 Pattern 提供 `run`，TeamMember 提供 `execute`；满足 Pattern 协议不代表满足成员协议。
 Pattern 复用下文的数据、引用、异常与副作用约定，不是 TeamMember 的子类型。
-M1 定义两个协议；M2 实现适配与 Sequential；M3 实现可递归的 Team 容器；M5 增加 Parallel。
+M1 定义两个协议；M2 实现适配与 Sequential；M3 实现可递归的 Team；M5 增加 Parallel；M6 增加 Members 与 Router。
 
 ## 运行手写基线与测试
 
@@ -73,7 +77,7 @@ uv --cache-dir .uv-cache pip install --python .venv/Scripts/python.exe --no-deps
 .venv/Scripts/python.exe -m pytest
 ```
 
-M1–M3 及 M5 的纯 Python 编排验证可使用 `--no-deps` 安装本地包，暂不安装 NOOA 运行时。
+M1–M3 及 M5–M6 的纯 Python 编排验证可使用 `--no-deps` 安装本地包，暂不安装 NOOA 运行时。
 pytest 配置会加入 `src` 和项目根目录，以便验证标准库协议与手写基线。
 `pyproject.toml` 已声明 NOOA 的 Git 依赖；
 `uv.lock` 锁定此次解析的 NOOA 提交与依赖版本，完整开发环境使用 `uv sync --locked`。
@@ -156,6 +160,11 @@ Parallel 与 Sequential 的交接规则不同：所有成员并发收到入口�
 不把前一结果作为下一输入。正常完成时返回新建 list，按成员顺序排列，元素保持原业务对象身份；
 不按完成顺序排序，不展开子列表或过滤 None。下游须明确接收结果列表，不能把它当作其中某个成员的单个结果。
 
+Router 每次调用一次 `selector(task, context)` 并执行一个选中成员；两者接收相同的入口引用，
+返回选中成员的原业务结果。selector 签名为 `Callable[[Any, Any], str]`。
+selector 应是纯函数式的同步决策，不应调用 LLM 或做 I/O；模型决策应由前置异步成员完成，selector 只读其产物。
+不支持异步 selector 或运行时双协议兼容；selector 的纯度是调用者责任，不由库检查或隔离。
+
 ### 3. 应用 context
 
 context 是调用者创建、持有和管理的应用级对象，可以是字典、dataclass 或其他对象。
@@ -185,6 +194,7 @@ Pattern 决定如何产生业务结果；Team 直接返回该结果，不额外�
 
 `None` 是普通业务结果。Sequential 中逐级原样传递，最后一步返回 `None` 时 Team 返回 `None`；
 Parallel 将它保留为结果列表中的对应元素，不影响其他成员的调用。
+Router 选中成员返回 None 时也原样返回，不切换到其他分支。
 它不表示跳过、提前结束、保留上一结果或错误。
 某一步只修改 context 且希望继续传递当前输入时，应显式 `return task`。
 
@@ -208,6 +218,10 @@ Parallel 仅使用固定的快速失败策略：观察到首个异常后，向�
 已经完成的成员不会追溯取消，成员吞掉取消后返回的值也不会把被取消的整次调用改为成功。
 快速失败指及时请求取消，不保证立即返回；异步清理或拒绝结束的成员可能延长等待，库不内置超时。
 
+Router 中 selector 或成员抛出的异常直接传播，取消传到被选成员，不自动执行其他分支。
+selector 返回非字符串时抛 TypeError；未命中抛 LookupError，消息包含返回名称和可用名称列表，
+例如 `selector returned 'unknown', available: ['security', 'architecture', 'quick']`，没有默认分支。
+
 ### 7. 超时
 
 首版没有内置超时参数。调用者可以用 `asyncio.timeout` 包裹整个调用，
@@ -219,14 +233,20 @@ Parallel 仅使用固定的快速失败策略：观察到首个异常后，向�
 Pattern 实例必须无执行状态、可复用。
 当前输入、执行进度、临时结果和异常应保存在调用局部变量中，
 不得写入 Pattern 字段或其他共享可变存储。
-同一个 `Sequential()` 或 `Parallel()` 可以被多个 Team 共享。
-未来固定配置与每次调用的可变执行状态应明确区分；Sequential 与 Parallel 不需要配置字段。
+同一个 Sequential、Parallel 或 Router 可以被多个 Team 共享。
+固定配置与每次调用的可变执行状态应明确区分；Router 保存 selector，不保存本次选择和结果。
+Pattern 的类声明 `requires_named_members` 默认 False，Router 声明 True；Sequential 与 Parallel 不要求命名。
+Protocol 不会给普通结构类型自动添加属性，未声明该属性的既有自定义 Pattern 按默认 False 处理。
 协议不能自动证明第三方 Pattern 无状态，实现者必须遵守该约定。
 
 ### 9. 成员快照、状态共享与并发
 
-Team 在构造时将成员序列保存为 tuple 快照，成员对象本身按引用保留，不复制、不重置。
-之后修改原始成员 list 不改变 Team；首版不提供动态增删成员接口。
+Team 接受 `Sequence[TeamMember] | Mapping[str, TeamMember]`，构造时浅拷贝并统一保存为 Members，
+保留输入顺序及原成员引用，不复制、不重置成员。之后修改原始 list/dict 不改变 Team；没有动态增删接口。
+`Team.members` 自 M6 起返回 Members，取代原 tuple；该属性只读。
+Members 支持 `__iter__`、`__len__`、`__getitem__(int | str)`、`has_name(name)` 和只读 `names` 元组。
+迭代总是得到成员对象；映射按输入顺序排列，序列不自动生成名称。整数访问支持负索引，
+越界抛 IndexError，未知名称抛 KeyError，不支持切片；映射的名称必须为字符串。
 同一个成员实例放入多个 Team，仍然是同一个有状态实例。
 重复执行 Team 不会自动开启干净会话。
 
@@ -236,11 +256,14 @@ Pattern 无状态也不意味着成员、Agent 或共享 context 并发安全。
 
 ### 10. 空成员与单成员
 
-Team 构造时拒绝空成员列表，抛出 `ValueError`。
+Team 构造时拒绝空成员序列或映射，抛出 `ValueError`；Members 本身允许空快照。
+如果 Pattern 声明要求命名，但传给 Team 的输入不是 Mapping，在构造时抛 ValueError；
+Router 的消息为 `Router requires named members`，不会等待前置分析产生副作用后再发现该结构错误。
 Team 保证传给 Pattern 的成员序列非空，直接调用 Pattern 的调用者也须满足此前提。
 单成员 Sequential 返回该成员的业务结果，不复制或包装。
 单成员 Parallel 返回单元素列表，None 也保留该位置。直接调用 Parallel.run 时也对空序列抛 ValueError；
 这不改变 Sequential 对直接空序列调用不作保证的既有边界。
+Router 的直接 run 同样要求非空命名 Members；只有一个名称时仍执行 selector 并检查返回名称。
 
 ### 11. 递归边界
 
@@ -275,6 +298,7 @@ M1 测试验证两个手写流程的业务结果、输入与产物交接、共�
 协议保持标准库实现，不依赖真实模型。
 M2 验证适配器与 Sequential；M3 验证递归 Team；
 M4 验证手写/组合等价性，以及使用公开 `FakeLLMClient` 的真实 NOOA Agent 调用。
+M6 验证 Members 快照与命名、构造时检查、Router 单分支执行及完整评审案例。
 
 M2 定向验收命令：
 
@@ -342,8 +366,8 @@ reports = await analysis.execute(proposal, context)
 # [FeasibilityReport, RiskReport, CostReport]，按成员顺序排列
 ```
 
-[Parallel 实现](src/nooa_patterns/patterns/parallel.py) 提供
-`async run(members: Sequence[TeamMember], task: Any, context: Any) -> list[Any]`。
+[Parallel 实现](src/nooa_patterns/patterns/parallel.py) 在 M5 的接口为
+`async run(members: Sequence[TeamMember], task: Any, context: Any) -> list[Any]`；M6 将成员标注统一为 Members，执行语义不变。
 所有成员共享入口引用；快速失败会取消未完成成员，等待清理后传播原异常。
 外层取消也会转交并等待清理；成员清理抛错不能把外层取消替换成业务异常。
 这不是立即中断或事务回滚保证，完整边界见上文契约。
@@ -369,4 +393,26 @@ reports = await analysis.execute(proposal, context)
 
 完整输出见 [M5_PYTEST.txt](docs/validation/M5_PYTEST.txt)，契约挑战、测试断言与实施记录见
 [实施计划 §9](docs/IMPLEMENTATION_PLAN.md)。M5 已通过 reviewer 技术复审，用户已指示提交推送，交付记录见 §9.10；
-Router、Loop 的接口归属及 Loop 耗尽标记仍是后续阶段的设计事项，本轮没有实现。
+M5 时尚未实现 Router / Loop；Router 的接口归属已在 M6 确定，Loop 耗尽标记仍待 M7 设计。
+
+### M6 Members 与 Router：案例与验证
+
+[Members](src/nooa_patterns/members.py) 提供顺序 / 名称访问；[Router](src/nooa_patterns/patterns/router.py)
+仅保存同步 selector。`Team(mapping, Router(selector))` 在构造时检查命名要求，所有 Pattern 的 run 均标注 Members。
+Sequential / Parallel 的执行语句保持不变；测试同时验证旧交接语义和新映射输入。
+
+[完整评审示例](examples/router_review.py) 保留手写并发、聚合、选择、审查的 await 对照，
+组合版以外层 Sequential 串起 Parallel 分析子 Team、普通聚合桥接和命名 Router 子 Team。
+调用者显式创建 `ReviewContext(proposal=task)`，聚合得到 `ReviewRequest(proposal, bundle)`；
+更换 task 时须由应用提供对应 context，库不注入原任务。三档风险分别选择 security / architecture / quick。
+替换 selector 的测试保留相同审查成员，验证分支变化；不把不同输入输出契约的 Pattern 当作等价替换。
+
+```powershell
+.venv/Scripts/python.exe -X utf8 examples/router_review.py
+.venv/Scripts/python.exe -X utf8 -m pytest -p no:cacheprovider tests/test_members.py tests/test_router.py tests/test_router_review.py -v
+```
+
+本次定向 **38 passed in 0.18s**；Windows 全量 **92 passed, 1 skipped in 0.44s**（上游 fcntl 限制）；
+WSL 禁网完整回归 **95 passed in 27.36s，无跳过**。完整逐项输出见 [M6_PYTEST.txt](docs/validation/M6_PYTEST.txt)，
+断言与命令见[实施计划 §10.5](docs/IMPLEMENTATION_PLAN.md)，reviewer 独立复审结果见 §10.7。
+M6 已通过技术复审，用户已指示提交推送，交付记录见实施计划 §10.8；Loop 未实现。
