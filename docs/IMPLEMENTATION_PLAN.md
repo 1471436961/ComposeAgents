@@ -1,7 +1,7 @@
 # 实施计划与验收基线：M0–M7
 
 本文件是项目唯一维护的实施计划，统一记录 M0–M7 的范围、契约决定、验证证据与阶段确认规则。
-当前 **M6：Members、构造时命名检查、Router 与评审案例已通过本地验证和 reviewer 技术复审，用户已指示提交推送**，交付记录见 §10.8。M7 Loop 尚未授权。
+当前 **M7：Loop 与显式反馈案例已通过本地验证与 reviewer 技术复审，无阻塞项，并按用户指示分次提交推送，交付见 §11.8**。四种基础原语已完成，后续工作等待用户确认；本阶段未做角色库或应用模板。
 
 本文件将已由用户确认的设计、M1–M7 实施任务和阶段确认规则落盘，供没有聊天上下文的
 实现者与 reviewer 使用。它记录实施范围，不表示后续里程碑已经获准开始。
@@ -82,8 +82,8 @@ README 将完整契约按 13 个主题组织，覆盖任务书中的 15 个要�
 | M3 | Team 容器 | 已通过本地验证与 reviewer 技术复审；已分次提交并推送，远程已核验，见 §7.6 |
 | M4 | 组合示例 + 等价测试 + NOOA 集成 | 已通过复审并分三次提交推送，远程 main 已核验为 536fbcb；历史证据见 §8.9 |
 | M5 | 设计 + Parallel | 已通过复审并分次提交推送，远程已核验为 2cc65b5；交付见 §9.10；用户已确认进入 M6 |
-| M6 | Members、声明式命名检查、Router 与专业审查案例 | 已通过本地验证和 reviewer 技术复审，无阻塞项；用户已指示提交推送，见 §10.5–10.8；M7 尚未授权 |
-| M7 | 通用有界 Loop；终止条件与耗尽标记契约 | 只规划，等待 M6 汇报后的用户确认；见 §11 |
+| M6 | Members、声明式命名检查、Router 与专业审查案例 | 已通过复审并分次提交推送，远程已核验为 180643b；用户已确认进入 M7，见 §10.8 |
+| M7 | 通用有界 Loop、显式反馈转换与应用侧耗尽观察 | 已通过本地验证与 reviewer 技术复审，无阻塞项；独立定向 41 项、WSL 禁网全量 136 项通过，见 §11.7；已按用户指示分次提交推送，交付见 §11.8；后续工作等待用户确认 |
 
 M1 的导出基线为 `TeamMember`、`Pattern`；M2 增加 `as_member` 与 `Sequential`，M3 增加 `Team`。
 M4 已完成两条应用微流程的等价对照和真实 NOOA 的公开方法集成，不能将此扩大为真实模型、
@@ -934,8 +934,8 @@ NOOA 参考目录与既有快照比较，1,500 文件内容与文件集合完全
 该能力可以先用普通 Python 循环描述，再提取通用有界原语；不是 Router 的失败重试，也不预置 EvaluatorOptimizer。
 M7 实现前仍须确认耗尽标记与“不自动注入任意 context”契约的扩展，以及终止 / 上限边界。
 
-当前停在 M6：已完成实现与本地验证，并通过 reviewer 技术复审（见 §10.7）；用户随后指示提交推送，交付见 §10.8。
-M7 Loop 尚未授权实现，等待用户确认后先澄清 §11 的契约边界。
+M6 完成时已通过本地验证与 reviewer 技术复审（见 §10.7），随后按用户指示提交推送，交付见 §10.8。
+用户之后授权 M7，已确认的契约与当前状态见 §11。
 
 ### 10.7 Reviewer M6 技术复审结论
 
@@ -952,7 +952,7 @@ M7 Loop 尚未授权实现，等待用户确认后先澄清 §11 的契约边界
 复审确认成员快照、声明式命名检查、单分支路由、引用、异常 / 取消、递归与案例均符合契约。
 将 Members 快照直接传回 Team 不在当前 Sequence / Mapping 输入承诺内；若后续扩展，须明确名称保留语义。
 直接 run 成功、单名称与异步 selector 拒绝等独立测试建议均为非阻塞项，不自动扩大本阶段范围。
-本次复审本身不构成提交推送或 M7 实现授权；后续用户明确指示提交推送，见 §10.8。M7 仍未授权。
+本次复审本身不构成提交推送或 M7 实现授权；后续用户明确指示提交推送，见 §10.8；再后续 M7 澄清确认与实现授权见 §11。
 
 ### 10.8 M6 分次提交与交付
 
@@ -966,24 +966,151 @@ M7 Loop 尚未授权实现，等待用户确认后先澄清 §11 的契约边界
 
 提交前检查 Python 语法、文档链接、空白、变更范围及原始 95 项通过记录；依赖声明、锁文件、
 适配器、既有示例及 M4 / M5 验证输出保持不变。复审后没有修改代码或测试，本次未重复运行 pytest；
-实施与 reviewer 独立结果分别保留在 §10.5、§10.7。推送目标为 origin/main，推送后核对
-本地 HEAD、远程跟踪分支与服务器端 main；最终提交号及推送结果以 Git 和本次交付回复为准。
+实施与 reviewer 独立结果分别保留在 §10.5、§10.7。已推送 origin/main，交付时核验
+本地 HEAD、远程跟踪分支与服务器端 main 均为 180643b4376a28735ce3fdfdad689b622b939312，工作树干净。
 
-## 11. M7：Loop 的计划与待澄清项（未实现）
+## 11. M7：Loop 与有界反馈评审
 
-用户草案为 Loop(members, until, max_iterations)：每轮按 Sequential 交接，
-完成整轮后判断 until(result, context)；max_iterations 必须显式给出，
-达到上限返回最后结果并记录 loop_exhausted，不抛耗尽异常，不自动累计每轮历史。
-终止判断属于调用者，库不内置质量或评审语义。
+用户已确认六项澄清并授权实现，现已通过本地验证与 reviewer 技术复审，无阻塞项，后续工作等待用户确认。本阶段只增加通用 Loop、显式反馈示例和测试；
+不预置 EvaluatorOptimizer，不实现角色库或应用模板。完成本阶段后汇报并停止。
 
-M7 开始前需要澄清：
+### 11.1 已确认的执行契约
 
-- 成员归属应与 M6 的 Members / Team 分工一致，Loop 的构造接口仍待 M7 确认；第 2 轮入口应明确为上一轮末结果。
-- 自动写 loop_exhausted 是对 v0“库不向任意 context 注入字段”的明确扩展；
-  任意对象未必能写字段，需明确 context 能力、标记清除/覆盖和嵌套 Loop 相互覆盖的语义。
-- max_iterations 正整数与 bool 边界、最后一轮 until 为真时的耗尽判定、判断函数抛错/取消的行为。
+```python
+Loop(until: Callable[[Any, Any], bool], *, max_iterations: int)
+async def run(self, members: Members, task: Any, context: Any) -> Any: ...
+```
 
-这些是未来契约设计事项，不在 M5 实现，不预置 EvaluatorOptimizer。
+- 成员仍由 Team 持有，requires_named_members=False，映射成员按顺序执行；空 Team 构造时拒绝，直接空 run 也拒绝。
+- max_iterations 无默认值，只接受正整数：非整数或 bool 抛 TypeError，零 / 负数抛 ValueError。
+- 首轮从入口 task 开始；每轮完整按 Sequential 语义执行全部成员，再调用一次 until，至少执行一轮。
+- 下一轮接收上一轮末结果，不复制 / 转换或自动恢复原任务；None 也是普通结果。
+- until 应是纯函数式同步判断，不应调用 LLM 或做 I/O，返回必须是 bool；其他类型 TypeError，不隐式取真值。
+- 最后一轮 until 为 True 仍是正常终止；执行满上限且仍 False 时返回最后结果，不因耗尽抛异常。
+- 成员或 until 的异常 / 取消直接传播，不重试、不回滚、不把异常或取消记录为耗尽。
+- Loop 不写 context 的任何字段，不提供 on_exhausted，不累积历史；资源继续归调用者。
+- until / max_iterations 是固定配置，轮次 / 当前结果在本次调用局部变量中，Loop 实例可复用。
+
+### 11.2 应用侧耗尽与类型反馈
+
+取消之前的“Loop 自动写 loop_exhausted”草案，保留 context 的应用所有权。原因：契约一致性，
+避免各 Pattern 争相写状态；固定字段在重复 / 嵌套调用中存在清除与覆盖问题；耗尽判定是应用语义。
+这些原因须写入实现注释。首版不加记录回调；真实需求反复出现后再评估。
+
+应用每次运行新建观察闭包，记录 rounds / last_ok，正常返回后计算
+`exhausted = (rounds == max_iterations and not last_ok)`。观察计数不改变纯业务判定；
+不要把同一个有状态观察闭包用于独立并发运行，Loop 不重置调用者的闭包状态。
+异常或取消会传播，正常返回后的耗尽计算不执行。
+
+跨轮兼容由应用负责，不提供 feedback_adapter 或自动转换。三种应用方式：
+1. 推荐在 members 末尾显式加入反馈转换成员；首版示例采用此方式。
+2. 入口成员自行接受多种输入并处理。
+3. 应用在 Loop 外显式包装转换；若要每轮转换，包装必须实际参与每轮调用，不能只在整次调用结束后转换一次。
+
+### 11.3 验收案例与文件
+
+examples/loop_review.py 扩展 M6 的技术评审业务。每轮为：
+分析子 Team（含 Parallel 与普通聚合）→ Router 审查子 Team → 显式反馈转换成员。
+第一轮输入 Proposal，反馈把 ReviewOpinion 转成下一轮可接受的 Proposal；until 读应用 context 中的审查结果。
+保留手写 for / await / 并发取消清理对照，复用相同业务函数，覆盖提前通过、最后一轮通过和耗尽。
+耗尽时返回的末反馈产物可能尚未再次审查，不得把它标成已通过。
+
+实现 src/nooa_patterns/patterns/loop.py 与导出，维护 README 和协议完整契约；
+tests/test_loop.py 覆盖参数边界、严格 bool、至少一轮、整轮顺序、跨轮引用 / None、
+最后一轮优先级、异常 / 取消、嵌套共享 context、独立复用与类型不兼容责任。
+tests/test_loop_review.py 验证每次运行新 context / 有状态业务成员 / 观察闭包、
+手写与组合等价、显式反馈、应用侧耗尽计算及失败 / 取消不被伪装成耗尽。
+
+### 11.4 实施顺序与验收
+
+先保存本契约，再实现 Loop 与核心测试，之后加入案例和对照测试。实际运行定向、示例、
+Windows 回归和 WSL 禁网全量回归；完整逐项输出保存在 docs/validation/M7_PYTEST.txt。
+结果取得后再记录，不预填通过；保留旧证据，不修改 NOOA 参考源码，不新增依赖。
+最后汇报接口、手写 / 组合对比、真实测试输出和四种原语的表达范围判断，然后停止。
+
+### 11.5 实施与本地验证记录
+
+交付 [Loop](../src/nooa_patterns/patterns/loop.py)、公共导出和完整契约、
+[反馈案例](../examples/loop_review.py)、[31 项核心测试](../tests/test_loop.py) 与
+[10 项案例测试](../tests/test_loop_review.py)。Loop 的“不写 context”理由写在代码注释，
+docstring 与示例保留每次新建 until 闭包的应用观察方式；无 feedback_adapter、on_exhausted 或库级状态封装。
+
+| 本次实际检查 | 结果 |
+| --- | --- |
+| M7 定向 | `41 passed in 0.20s`，31 核心 + 10 案例 |
+| Windows 全量 | `133 passed, 1 skipped in 0.54s`；仍为上游 fcntl 限制的 NOOA 模块 |
+| WSL Ubuntu 24.04 / Python 3.12.3 / pytest 9.1.1 禁网全量 | `136 passed in 25.92s`，无跳过，包含原 NOOA 三项集成 |
+| Windows / WSL 禁网示例 | 提前通过 1 轮、末轮通过 2 轮、耗尽 3 轮的手写 / 组合对照均通过，退出 0 |
+| Windows 隔离导入 | `python -I` 导入九个公共名称成功 |
+
+Windows / Python 3.12.14 / pytest 9.1.1 实际命令：
+
+```powershell
+.\.venv\Scripts\python.exe -X utf8 examples\loop_review.py
+.\.venv\Scripts\python.exe -X utf8 -m pytest -p no:cacheprovider tests/test_loop.py tests/test_loop_review.py -v
+.\.venv\Scripts\python.exe -X utf8 -m pytest -p no:cacheprovider -v
+```
+
+WSL 完整逐项输出保存在 [M7_PYTEST.txt](validation/M7_PYTEST.txt)：
+
+```bash
+set -o pipefail
+unshare --net .uv-cache/wsl-venv/bin/python -X utf8 -m pytest -p no:cacheprovider -v 2>&1 | tee docs/validation/M7_PYTEST.txt
+unshare --net .uv-cache/wsl-venv/bin/python -X utf8 examples/loop_review.py
+```
+
+核心测试覆盖 §11.1 的参数、顺序、反馈、None、上限优先级和失败约定。只读 context 的嵌套测试预置
+loop_exhausted / rounds 同名字段，确认内外 Loop 均不新增或覆盖。交错运行与重复调用验证共享 Loop 无执行状态串扰。
+案例每次对照使用新 context、业务成员与观察闭包，运行内检查原任务 / 审查 / 反馈身份，跨运行比较业务值与事件多重集。
+另覆盖耗尽后尚未审查的反馈方案、同 context 重复运行的闭包计数隔离，以及手写 / 组合失败和取消不产生耗尽结果。
+14 个既有运行代码、示例、依赖及验证文件与基线保持不变；NOOA 参考目录 1,500 文件路径及 SHA-256 均未变化。
+
+### 11.6 四原语判断与停止状态
+
+Sequential、Parallel、Router、Loop 覆盖顺序、并发汇集、分支与有界重复，可作为多数候选复合模式的控制流基础。
+例如 Voting / MoA 可由 Parallel 加普通聚合组成，反馈优化可由 Loop 加顺序成员与显式转换组成；
+投票规则、消息交换和业务状态仍由应用定义。这是表达能力判断，不是已经测得的模式覆盖率或真实应用效率结论。
+建议先收敛四种原语，通过真实 NOOA 应用验证复用价值；此处不提前增加复合 Pattern、角色库或应用模板。
+
+当前停在 M7：实现、本地验证及 reviewer 技术复审均已完成，用户随后指示提交推送，交付见 §11.8。后续工作等待用户指示，不自动进入新的里程碑。
+
+### 11.7 Reviewer M7 技术复审结论
+
+用户提供的《M7 Review 报告》结论为 **通过，无阻塞项**。以下为 reviewer 独立执行并报告的结果，
+与 §11.5 的实施时运行分开记录，不覆盖原始 [M7_PYTEST.txt](validation/M7_PYTEST.txt)。
+
+| Reviewer 独立检查 | 报告结果 |
+| --- | --- |
+| M7 定向 | `41 passed in 0.14s` |
+| Windows 全量 | `133 passed, 1 skipped in 0.36s`；仍为上游 fcntl 限制的 NOOA 模块 |
+| WSL 禁网全量 | `136 passed in 24.62s`，无跳过 |
+| 两平台示例与隔离导入 | 提前通过、末轮通过、耗尽对照及九个公共名称导入均通过 |
+
+复审确认参数边界、严格 bool、整轮执行、显式反馈、应用侧耗尽观察、异常 / 取消传播、
+嵌套共享 context 不被库写入及 Loop 独立复用均符合契约；未发现额外 Pattern、角色库、应用模板或 NOOA 源码修改。
+构造时提前检查 `callable(until)` 属于非阻塞的可选硬化建议，本次不扩大已确认的弱类型契约。
+
+四种基础原语已完成实现与技术复审；本次仅同步既有文档状态，未修改代码或重复运行 pytest。
+复审时 M7 尚未提交推送，也未自动进入新的里程碑。用户随后授权提交推送，交付见 §11.8；后续真实应用验证等待另行指示。
+
+### 11.8 用户授权与 M7 提交交付
+
+用户在 M7 技术复审通过后明确指示“提交并推送”。按职责分三次交付：
+
+| 提交 | 内容 |
+| --- | --- |
+| `e23fe23` | Loop 实现、公共导出、协议完整契约与 31 项核心测试 |
+| `c639aba` | 显式反馈评审示例、10 项对照测试及原始 M7 全量验证输出 |
+| 本节所在文档提交 | 同步 README、AGENTS 与唯一实施计划的复审和交付状态 |
+
+交付前核对变更仅涉及 M7 的 11 个文件，Python 语法、空白与本地文档链接通过；
+原始验证记录仍为 `136 passed in 25.92s`，未被 reviewer 的独立运行结果覆盖。
+复审后未修改代码或测试，提交阶段未重复运行 pytest。
+
+源码、示例和验证证据已推送至 origin/main，服务器端核验至
+`c639aba277fc3a90de001f07b2926bc00a3108a8`；本节随独立文档提交交付。
+最终 main 提交号与工作树状态在本轮交付汇报中核验，不在提交内记录自身哈希。
+此授权只完成 M7 的提交推送，不授权新的里程碑、角色库或应用模板。
 
 ## 12. Reviewer 如何判定问题
 

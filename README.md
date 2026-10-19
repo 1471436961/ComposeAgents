@@ -5,7 +5,7 @@ NOOA 之上的轻量协作模式与组合库，工作名暂定 `nooa-patterns`�
 NOOA 负责 Agent 执行、策略、模型调用、对象状态、原生校验和事件历史；
 本项目负责成员调用边界、显式参数桥接与普通 Python 协作逻辑。
 
-## 当前里程碑：M6（Members 与 Router 已通过技术复审，按用户指示交付）
+## 当前里程碑：M7（技术复审通过，已提交推送）
 
 M1 提供两个手写顺序流程、`TeamMember` / `Pattern` 协议及基线测试。
 M2 已实现 `as_member` 与 `Sequential`；M3 已实现 `Team`。
@@ -20,10 +20,13 @@ M5 定向 22 项通过；WSL 禁网完整回归 57 项通过、无跳过。用�
 独立复审结果见实施计划 §9.9；M5 已提交推送，交付记录见 §9.10。
 M6 已按确认的契约实现并完成本地验证，定向 38 项、WSL 禁网全量 95 项通过，见 §10。
 用户提供的 M6 reviewer 报告结论为通过、无阻塞项，独立测试结果见实施计划 §10.7。
-用户随后指示提交推送，交付记录见实施计划 §10.8。当前停在 M6，M7 Loop 仍未授权。
-当前只实现 Router 所需的成员支持、选择逻辑和评审案例；核心只保留四种基础原语，复合协作放未来示例和文档。
+M6 已提交推送，交付记录见实施计划 §10.8。M7 已按确认的六项契约实现并完成本地验证，见 §11。
+用户提供的 M7 reviewer 报告结论为通过、无阻塞项，独立测试结果见实施计划 §11.7。
+四种基础原语均已完成实现与技术复审；M7 已按用户指示分次提交并推送，交付记录见实施计划 §11.8。
+当前停在 M7，后续工作等待用户确认。
+当前只实现 Loop 与显式反馈评审示例；核心只保留四种基础原语，复合协作放示例和文档，不提前做角色库或应用模板。
 
-当前公共导出为 `TeamMember`、`Pattern`、`Members`、`as_member`、`Sequential`、`Parallel`、`Router`、`Team`。
+当前公共导出为 `TeamMember`、`Pattern`、`Members`、`as_member`、`Sequential`、`Parallel`、`Router`、`Loop`、`Team`。
 `as_member(fn)` 接受 `(task, context) -> Awaitable[result]` 的显式桥接函数；
 `await Sequential().run(members, task, context)` 逐级交接结果。
 直接调用 Sequential 的 `run` 时，成员非空是调用前提；空序列调用不受支持，行为不保证。
@@ -32,6 +35,7 @@ Parallel 的 `run` 对空序列明确抛出 `ValueError`。
 `await team.execute(task, context)` 委托 Pattern，子 Team 保留自己的 Pattern，业务结果原样返回。
 `Team(members, Parallel())` 并发调用成员，按成员顺序返回结果列表；失败/取消时取消并等待未完成成员。
 `Team({"name": member, ...}, Router(selector))` 按同步 selector 返回的名称执行一个成员；非映射输入在构造时拒绝。
+`Team(members, Loop(until, max_iterations=3))` 执行完整顺序轮次，轮后检查 until，末结果作为下一轮入口。
 
 ## 核心抽象
 
@@ -56,7 +60,7 @@ async def run(self, members: Members, task: Any, context: Any) -> Any: ...
 
 Pattern 提供 `run`，TeamMember 提供 `execute`；满足 Pattern 协议不代表满足成员协议。
 Pattern 复用下文的数据、引用、异常与副作用约定，不是 TeamMember 的子类型。
-M1 定义两个协议；M2 实现适配与 Sequential；M3 实现可递归的 Team；M5 增加 Parallel；M6 增加 Members 与 Router。
+M1 定义两个协议；M2 实现适配与 Sequential；M3 实现可递归的 Team；M5 增加 Parallel；M6 增加 Members 与 Router；M7 增加 Loop。
 
 ## 运行手写基线与测试
 
@@ -77,7 +81,7 @@ uv --cache-dir .uv-cache pip install --python .venv/Scripts/python.exe --no-deps
 .venv/Scripts/python.exe -m pytest
 ```
 
-M1–M3 及 M5–M6 的纯 Python 编排验证可使用 `--no-deps` 安装本地包，暂不安装 NOOA 运行时。
+M1–M3 及 M5–M7 的纯 Python 编排验证可使用 `--no-deps` 安装本地包，暂不安装 NOOA 运行时。
 pytest 配置会加入 `src` 和项目根目录，以便验证标准库协议与手写基线。
 `pyproject.toml` 已声明 NOOA 的 Git 依赖；
 `uv.lock` 锁定此次解析的 NOOA 提交与依赖版本，完整开发环境使用 `uv sync --locked`。
@@ -165,6 +169,14 @@ Router 每次调用一次 `selector(task, context)` 并执行一个选中成员�
 selector 应是纯函数式的同步决策，不应调用 LLM 或做 I/O；模型决策应由前置异步成员完成，selector 只读其产物。
 不支持异步 selector 或运行时双协议兼容；selector 的纯度是调用者责任，不由库检查或隔离。
 
+Loop 至少执行一轮，每轮完整按 Sequential 语义执行所有成员，然后调用一次 until。
+首轮入口是 task，之后每轮入口是上一轮末结果；不提前检查入口，不自动恢复原任务或转换类型。
+`Loop(until, *, max_iterations)` 的上限无默认值且为必需关键字参数，只接受正整数：
+非整数或 bool 抛 TypeError，零 / 负数抛 ValueError。
+until 签名为 `Callable[[Any, Any], bool]`，应是纯函数式同步判断，不应调用 LLM 或做 I/O；
+返回非 bool 抛 TypeError，不隐式取真值。最后一轮 until 为 True 算正常终止；满上限仍 False 则返回末结果，不因耗尽抛异常。
+本轮末结果必须能作为下一轮入口；转换由应用显式成员负责，库不提供 feedback_adapter。
+
 ### 3. 应用 context
 
 context 是调用者创建、持有和管理的应用级对象，可以是字典、dataclass 或其他对象。
@@ -177,6 +189,12 @@ context 是调用者创建、持有和管理的应用级对象，可以是字典
 
 Parallel 不保护 task/context 的并发读写，**调用者负责共享对象的并发安全**。
 task 同样是共享活引用；并发不保证 CPU 并行，阻塞代码也可能阻碍失败处理与取消。
+
+Loop 不自动写 loop_exhausted 或任何其他字段，不自动累计轮次 / 历史，首版不提供 on_exhausted 回调。
+这保持 context 的应用所有权，避免固定状态字段在重复 / 嵌套运行中产生清除与覆盖问题；耗尽判定属于应用语义。
+应用可每次创建新的 until 观察闭包，计数 rounds 并保存 last_ok，在正常返回后计算
+`exhausted = (rounds == max_iterations and not last_ok)`。观察计数不改变纯业务判断；
+同一个有状态观察闭包不应共享给独立并发调用。异常 / 取消正常传播，不执行上述正常返回后的耗尽计算。
 
 ### 4. 返回值与递归调用边界
 
@@ -195,6 +213,7 @@ Pattern 决定如何产生业务结果；Team 直接返回该结果，不额外�
 `None` 是普通业务结果。Sequential 中逐级原样传递，最后一步返回 `None` 时 Team 返回 `None`；
 Parallel 将它保留为结果列表中的对应元素，不影响其他成员的调用。
 Router 选中成员返回 None 时也原样返回，不切换到其他分支。
+Loop 的 None 末结果原样交给 until，必要时作为下一轮输入。
 它不表示跳过、提前结束、保留上一结果或错误。
 某一步只修改 context 且希望继续传递当前输入时，应显式 `return task`。
 
@@ -221,21 +240,24 @@ Parallel 仅使用固定的快速失败策略：观察到首个异常后，向�
 Router 中 selector 或成员抛出的异常直接传播，取消传到被选成员，不自动执行其他分支。
 selector 返回非字符串时抛 TypeError；未命中抛 LookupError，消息包含返回名称和可用名称列表，
 例如 `selector returned 'unknown', available: ['security', 'architecture', 'quick']`，没有默认分支。
+Loop 中成员失败即停止本轮，until 失败即停止后续轮次；异常和取消直接传播，不重试、不回滚、不记录为耗尽。
 
 ### 7. 超时
 
 首版没有内置超时参数。调用者可以用 `asyncio.timeout` 包裹整个调用，
 或用显式适配函数限制单成员调用。底层 NOOA 调用自己的超时仍然有效。
 超时不保证立即停止成员，也不会撤销副作用。
+Loop 的 max_iterations 只限制轮数，不是总耗时或强制终止保证。
 
 ### 8. Pattern 无执行状态
 
 Pattern 实例必须无执行状态、可复用。
 当前输入、执行进度、临时结果和异常应保存在调用局部变量中，
 不得写入 Pattern 字段或其他共享可变存储。
-同一个 Sequential、Parallel 或 Router 可以被多个 Team 共享。
-固定配置与每次调用的可变执行状态应明确区分；Router 保存 selector，不保存本次选择和结果。
-Pattern 的类声明 `requires_named_members` 默认 False，Router 声明 True；Sequential 与 Parallel 不要求命名。
+同一个 Sequential、Parallel、Router 或 Loop 可以被多个 Team 共享。
+固定配置与每次调用的可变执行状态应明确区分；Router 保存 selector，Loop 保存 until / max_iterations，
+本次选择、轮次、当前结果均为调用局部状态；库不重置调用者的闭包、成员或资源。
+Pattern 的类声明 `requires_named_members` 默认 False，Router 声明 True；Sequential、Parallel、Loop 不要求命名。
 Protocol 不会给普通结构类型自动添加属性，未声明该属性的既有自定义 Pattern 按默认 False 处理。
 协议不能自动证明第三方 Pattern 无状态，实现者必须遵守该约定。
 
@@ -264,6 +286,7 @@ Team 保证传给 Pattern 的成员序列非空，直接调用 Pattern 的调用
 单成员 Parallel 返回单元素列表，None 也保留该位置。直接调用 Parallel.run 时也对空序列抛 ValueError；
 这不改变 Sequential 对直接空序列调用不作保证的既有边界。
 Router 的直接 run 同样要求非空命名 Members；只有一个名称时仍执行 selector 并检查返回名称。
+直接 Loop.run 同样拒绝空成员；单成员也执行完该成员后才调用 until。
 
 ### 11. 递归边界
 
@@ -299,6 +322,7 @@ M1 测试验证两个手写流程的业务结果、输入与产物交接、共�
 M2 验证适配器与 Sequential；M3 验证递归 Team；
 M4 验证手写/组合等价性，以及使用公开 `FakeLLMClient` 的真实 NOOA Agent 调用。
 M6 验证 Members 快照与命名、构造时检查、Router 单分支执行及完整评审案例。
+M7 验证有界整轮执行、显式反馈、应用侧耗尽观察、异常 / 取消及嵌套和复用。
 
 M2 定向验收命令：
 
@@ -393,7 +417,7 @@ reports = await analysis.execute(proposal, context)
 
 完整输出见 [M5_PYTEST.txt](docs/validation/M5_PYTEST.txt)，契约挑战、测试断言与实施记录见
 [实施计划 §9](docs/IMPLEMENTATION_PLAN.md)。M5 已通过 reviewer 技术复审，用户已指示提交推送，交付记录见 §9.10；
-M5 时尚未实现 Router / Loop；Router 的接口归属已在 M6 确定，Loop 耗尽标记仍待 M7 设计。
+M5 时尚未实现 Router / Loop；后续契约与实现分别见 M6、M7 章节。
 
 ### M6 Members 与 Router：案例与验证
 
@@ -415,4 +439,26 @@ Sequential / Parallel 的执行语句保持不变；测试同时验证旧交接�
 本次定向 **38 passed in 0.18s**；Windows 全量 **92 passed, 1 skipped in 0.44s**（上游 fcntl 限制）；
 WSL 禁网完整回归 **95 passed in 27.36s，无跳过**。完整逐项输出见 [M6_PYTEST.txt](docs/validation/M6_PYTEST.txt)，
 断言与命令见[实施计划 §10.5](docs/IMPLEMENTATION_PLAN.md)，reviewer 独立复审结果见 §10.7。
-M6 已通过技术复审，用户已指示提交推送，交付记录见实施计划 §10.8；Loop 未实现。
+M6 已通过技术复审并提交推送，交付记录见实施计划 §10.8；M7 的 Loop 契约与验证见下节。
+
+### M7 Loop：显式反馈与应用侧耗尽
+
+[Loop](src/nooa_patterns/patterns/loop.py) 使用 `Loop(until, *, max_iterations)`，每轮完整执行 Sequential，
+轮后严格检查 bool；最后一轮 True 正常终止，满上限仍 False 返回末结果。成员仍由 Team 持有，映射按顺序执行。
+库不写任何 context 字段，不加 on_exhausted；应用每次新建 until 观察闭包，在正常返回后计算耗尽。
+
+[反馈评审示例](examples/loop_review.py) 保留手写 for / await / 并发清理对照，组合版每轮为：
+分析子 Team（Sequential + Parallel）→ Router 审查子 Team → 显式 ReviewOpinion-to-Proposal 反馈成员。
+until 读取应用 context 中的审查结果；ReviewRun 只是示例函数的应用观测产物，Loop 自身仍返回原业务结果。
+示例文档说明三种跨轮转换方式，采用末尾反馈成员；耗尽后的末反馈方案可能尚未再次审查，不能宣称已通过。
+
+```powershell
+.venv/Scripts/python.exe -X utf8 examples/loop_review.py
+.venv/Scripts/python.exe -X utf8 -m pytest -p no:cacheprovider tests/test_loop.py tests/test_loop_review.py -v
+```
+
+本次 [核心测试](tests/test_loop.py) 31 项、[案例测试](tests/test_loop_review.py) 10 项，
+合计 **41 passed in 0.20s**；Windows 全量 **133 passed, 1 skipped in 0.54s**（原 NOOA fcntl 限制）；
+WSL 禁网全量 **136 passed in 25.92s，无跳过**。两平台示例均通过提前、末轮通过和耗尽三种对照。
+完整逐项输出见 [M7_PYTEST.txt](docs/validation/M7_PYTEST.txt)，命令、断言和表达范围判断见
+[实施计划 §11.5–11.6](docs/IMPLEMENTATION_PLAN.md)。M7 技术复审已通过并提交推送，独立复审与交付记录见 §11.7–11.8；后续工作等待用户确认。
