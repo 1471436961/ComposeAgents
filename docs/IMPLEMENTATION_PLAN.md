@@ -1,7 +1,7 @@
-# 实施计划与验收基线：M0–M7
+# 实施计划与验收基线
 
-本文件是项目唯一维护的实施计划，统一记录 M0–M7 的范围、契约决定、验证证据与阶段确认规则。
-当前 **M7：Loop 与显式反馈案例已通过本地验证与 reviewer 技术复审，无阻塞项，并按用户指示分次提交推送，交付见 §11.8**。四种基础原语已完成，后续工作等待用户确认；本阶段未做角色库或应用模板。
+本文件是项目唯一维护的实施计划，统一记录 M0–M7 及后续三个台阶的范围、契约决定、验证证据与阶段确认规则。
+当前 **台阶一：两个复合示例已通过本地验证与 reviewer 技术复审，无阻塞项，并按用户指示分次提交推送，交付见 §15.5**。独立定向 21 项、WSL 禁网全量 157 项通过，见 §15.4。后续工作等待用户确认；M0–M7 已完成并交付，四种基础原语保持不变。本轮不进入真实 LLM 应用或角色库。
 
 本文件将已由用户确认的设计、M1–M7 实施任务和阶段确认规则落盘，供没有聊天上下文的
 实现者与 reviewer 使用。它记录实施范围，不表示后续里程碑已经获准开始。
@@ -32,7 +32,7 @@ Agent 状态管理或事件历史，不以 LangGraph / CrewAI 为基础，也不
 
 核心只提供 Sequential、Parallel、Router、Loop 四种基础控制原语，仍以 NOOA 公开 API 为底座。
 Supervisor、GroupChat、Handoff 不作为标准 Pattern；EvaluatorOptimizer、Voting、Debate、
-PlanExecute、MapReduce、MoA 仅可作为未来 examples / 文档中的组合方式，不预置同名核心类。
+PlanExecute、MapReduce、MoA 仅可作为 examples / 文档中的组合方式，不预置同名核心类。
 Blackboard、ContractNet、Negotiation 不做。领域角色留待未来应用验证，M5 不创建 roles/。
 模式目录是研究资产，不是逐项实现路线图。
 
@@ -83,7 +83,10 @@ README 将完整契约按 13 个主题组织，覆盖任务书中的 15 个要�
 | M4 | 组合示例 + 等价测试 + NOOA 集成 | 已通过复审并分三次提交推送，远程 main 已核验为 536fbcb；历史证据见 §8.9 |
 | M5 | 设计 + Parallel | 已通过复审并分次提交推送，远程已核验为 2cc65b5；交付见 §9.10；用户已确认进入 M6 |
 | M6 | Members、声明式命名检查、Router 与专业审查案例 | 已通过复审并分次提交推送，远程已核验为 180643b；用户已确认进入 M7，见 §10.8 |
-| M7 | 通用有界 Loop、显式反馈转换与应用侧耗尽观察 | 已通过本地验证与 reviewer 技术复审，无阻塞项；独立定向 41 项、WSL 禁网全量 136 项通过，见 §11.7；已按用户指示分次提交推送，交付见 §11.8；后续工作等待用户确认 |
+| M7 | 通用有界 Loop、显式反馈转换与应用侧耗尽观察 | 已通过本地验证与 reviewer 技术复审，无阻塞项；独立定向 41 项、WSL 禁网全量 136 项通过，见 §11.7；已按用户指示分次提交推送，交付见 §11.8；用户随后授权台阶一 |
+| 台阶一 | EvaluatorOptimizer 与 Debate 示例、手写对照和验证 | 已通过本地验证及 reviewer 技术复审，无阻塞项；独立定向 21 项、WSL 禁网全量 157 项通过，见 §15.4；已按用户指示分次提交推送，交付见 §15.5；不改库，当前停止，后续工作等待用户确认 |
+| 台阶二 | 真实 NOOA + LiteLLM 技术方案评审应用 | 仅规划，等待台阶一汇报后的用户确认 |
+| 台阶三 | 基于两个复合示例与真实应用的判断报告 | 仅规划，届时只判断、不写代码，不提前执行 |
 
 M1 的导出基线为 `TeamMember`、`Pattern`；M2 增加 `as_member` 与 `Sequential`，M3 增加 `Team`。
 M4 已完成两条应用微流程的等价对照和真实 NOOA 的公开方法集成，不能将此扩大为真实模型、
@@ -1072,7 +1075,7 @@ Sequential、Parallel、Router、Loop 覆盖顺序、并发汇集、分支与有
 投票规则、消息交换和业务状态仍由应用定义。这是表达能力判断，不是已经测得的模式覆盖率或真实应用效率结论。
 建议先收敛四种原语，通过真实 NOOA 应用验证复用价值；此处不提前增加复合 Pattern、角色库或应用模板。
 
-当前停在 M7：实现、本地验证及 reviewer 技术复审均已完成，用户随后指示提交推送，交付见 §11.8。后续工作等待用户指示，不自动进入新的里程碑。
+M7 交付时实现、本地验证及 reviewer 技术复审均已完成，用户随后指示提交推送，交付见 §11.8。后续台阶一的用户授权见 §15，不自动开始台阶二。
 
 ### 11.7 Reviewer M7 技术复审结论
 
@@ -1143,3 +1146,113 @@ Sequential、Parallel、Router、Loop 覆盖顺序、并发汇集、分支与有
 实施计划统一维护在本文件；必要的专题细节可独立成文，通过链接引用，不重复维护计划或阶段状态。
 非必要不新增文档；是否新增由 agent 根据内容与维护需要自行判断，不以更新现有文件为优先规则。
 需要写文档时明确文档层级和职责，合理拆分并通过链接组织，避免内容重复或单篇过于冗长。
+
+## 15. 四原语完成后的三台阶验证路线
+
+用户已确认递进路线，仅授权本轮台阶一，不另编号 M8 或建立第二份计划。
+基础原语留在库内；复合模式以 examples/composites 示例交付，需要时复制修改，不成为公开 API。
+只有同一组合至少在 3 个真实场景重复出现且契约稳定，才考虑提议可选 nooa_patterns.composites；
+两个 fake 示例及既有微型案例不能算作 3 个真实场景。领域团队模板不进核心。
+
+### 15.1 台阶一：两个纯组合示例（已授权）
+
+- examples/composites/evaluator_optimizer.py：确定性生成 → 评估 → 显式反馈转换，组成 Sequential 子 Team，再由 Loop 有界重复。
+- examples/composites/debate.py：两位提案成员组成 Parallel 子 Team，与普通裁决成员一起由 Loop 重复；后一轮实际读取前轮对手观点与裁决反馈。
+- 每个文件提供复用同一业务实现的手写 await / for 对照，不引入新的 Pattern 类或通用组合运行器；使用 Team、现有原语及 as_member 显式桥接。
+- 显式业务类型承载跨轮输入；context、历史和每次运行的耗尽观察归应用。假数据只验证控制流，不宣称文本质量或真实模型效率。
+- tests/test_evaluator_optimizer.py 与 tests/test_debate.py：独立 context / 有状态成员的手写与组合等价、运行内引用、提前与末轮终止、耗尽、真实反馈、失败及取消；并发对照同样取消并等待兄弟清理。
+- 实际运行两个脚本、定向 pytest、Windows 全量与 WSL 禁网全量。结果写回本节，不另建实施计划或报告；M4–M7 原始证据保留不变。
+- src/、pyproject.toml、uv.lock、公开导出及只读 NOOA 源码保持不变。完成后汇报结构、对照、表达不适与初步判断，然后停止。
+
+### 15.2 台阶二与台阶三（只规划，未授权开始）
+
+台阶二在 applications/technical_review 复用同一业务实现，提供手写与组合版，使用真实 NOOA Agent 和经 LiteLLM 接入的真实模型。
+验证数据流、原语复用、可读性与修改成本、失败 / 取消 / 耗尽；记录模型调用数、token 和耗时及顺畅 / 别扭之处。
+模型、凭据与运行成本在该阶段开始前落实，本轮不读取凭据、不运行真实模型，也不创建应用占位文件。
+
+台阶三只基于实际发现判断：四原语的表达缺口、至少 3 个真实场景支撑的稳定组合、可复用角色 prompt、
+应用设计问题与原语缺失的区分，以及保持薄内核发布 0.1 或补能力的结论。不预设发布或扩展结论。
+
+### 15.3 台阶一验证与发现
+
+交付两个独立示例文件和 [EvaluatorOptimizer 测试](../tests/test_evaluator_optimizer.py)、
+[Debate 测试](../tests/test_debate.py)，未新增通用组合运行器、Pattern 类或公开接口。
+
+| 本次实际运行 | 结果 |
+| --- | --- |
+| 两文件定向 pytest | `21 passed in 0.19s`：优化 9 项、辩论 12 项 |
+| Windows 全量 | `154 passed, 1 skipped in 0.57s`；跳过的仍是既有 NOOA fcntl 集成模块 |
+| WSL Ubuntu 24.04 / Python 3.12.3 禁网全量 | `157 passed in 27.29s`，无跳过，包含原 NOOA 三项集成 |
+| 两个脚本 | Windows 与 WSL 禁网均退出 0；提前结束、末轮通过、耗尽对照均通过 |
+| Windows 模块入口 | 两个 `python -m examples.composites.*` 入口均退出 0 |
+
+实际命令：
+
+```powershell
+.venv/Scripts/python.exe -X utf8 examples/composites/evaluator_optimizer.py
+.venv/Scripts/python.exe -X utf8 examples/composites/debate.py
+.venv/Scripts/python.exe -X utf8 -m pytest -p no:cacheprovider tests/test_evaluator_optimizer.py tests/test_debate.py -v
+.venv/Scripts/python.exe -X utf8 -m pytest -p no:cacheprovider -q
+```
+
+```bash
+unshare --net .uv-cache/wsl-venv/bin/python -X utf8 -m pytest -p no:cacheprovider -q
+unshare --net .uv-cache/wsl-venv/bin/python -X utf8 examples/composites/evaluator_optimizer.py
+unshare --net .uv-cache/wsl-venv/bin/python -X utf8 examples/composites/debate.py
+```
+
+对照每次创建新的 context、有状态业务成员和观察闭包；跨运行比较业务值，运行内检查 task / 中间产物 / context 身份。
+优化案例检查评估反馈实际成为下一轮输入；辩论案例检查前轮对手论点与裁决反馈进入后轮提案。
+并发门控证明提案重叠、反向完成仍按成员顺序交给裁决；失败测试阻塞兄弟清理，确认两版均等待清理后传播原异常。
+外层取消测试确认两个提案成员均结束且不裁决；生成 / 评估 / 裁决失败不被伪装成耗尽或重试。
+本轮未另建报告或验证日志；历史 M4–M7 原始证据、src/、依赖及公开导出均保持不变。
+NOOA 参考目录 1,500 个文件路径及 SHA-256 与既有快照一致，语法、空白和本地文档链接检查通过。
+
+表达与维护上的发现：
+
+1. 没有遇到这两个示例必须新增原语才能表达的控制流。显式 Sequential 子 Team 与 Parallel 子 Team 均能作为 Loop 的成员。
+2. Request → Draft → Evaluation → Request 的类型环，以及辩论 State / Argument / State 的消息环，仍须应用设计；这是业务契约工作，不能靠统一 execute 签名消除。
+3. Loop 每轮执行完整成员序列，成功轮也执行反馈转换；本例转换保持已评估文本。若需跳过某个业务步骤，可显式组合 Router 分支，不能误以为 until 在轮中检查。
+4. 每次新建 rounds / accepted 观察闭包及应用 Outcome 有重复样板。这是此前保留 context 所有权的选择；两个 fake 示例不构成增加回调或公共结果封装的证据。
+5. 短优化流程的手写 for / await 仍直接；组合版把成员结构单独呈现。辩论组合版减少了应用层并发任务、失败取消与等待清理代码，收益更明确。
+6. 本例辩论只是两位提案者按确定性规则回应再裁决；自由发言次序、完整消息协议、长期历史保留和真实判断质量均未验证。保留 source 活引用用于检查交接，不是历史存储设计。
+
+初步判断只覆盖这两个 fake 组合：现有原语足以表达，暂不补原语、复合子包或角色库；
+不据此宣称覆盖大多数真实多智能体系统或证明模型成本收益，也未满足 3 个真实场景的提取门槛。
+当前停在台阶一，实现、本地验证和技术复审均已完成，已按用户指示提交推送，交付见 §15.5；后续工作等待用户确认，台阶二和台阶三仍未授权开始。
+
+### 15.4 Reviewer 台阶一技术复审结论
+
+用户提供的《复合示例 Review 报告（台阶一）》结论为 **通过，无阻塞项**。
+以下为 reviewer 独立执行并报告的结果，与 §15.3 的实施时运行分开保留：
+
+| Reviewer 独立检查 | 报告结果 |
+| --- | --- |
+| 两文件定向 pytest | `21 passed in 0.11s`：EvaluatorOptimizer 9 项、Debate 12 项 |
+| Windows 全量 | `154 passed, 1 skipped in 0.41s`；仍为既有 NOOA fcntl 平台限制 |
+| WSL 禁网全量 | `157 passed in 27.10s`，无跳过 |
+| 脚本与模块入口 | 两个脚本在 Windows / WSL 禁网运行成功；Windows 两个模块入口均退出 0 |
+
+复审确认两版复用相同业务实现、真实存在跨轮反馈，应用保有 context / 历史 / 耗尽观察；
+失败与取消直接传播，手写并发对照同样取消并等待兄弟清理。src/、依赖、公开 API 与 NOOA 参考源码均未改变。
+Argument.source 的回溯链仅用于短示例；长循环应按需保留观点 / 反馈。该观察及可选 __init__.py 建议均非阻塞，未据此扩展实现。
+
+本次仅同步既有文档中的复审状态，未修改代码、重复运行 pytest 或新增报告。
+两个 fake 示例不满足至少 3 个真实场景的提取门槛，不提升 composites 子包或角色库。
+复审时台阶一尚未提交推送，用户随后授权提交交付，见 §15.5；台阶二的模型、配置与运行成本安排等待用户后续指示。
+
+### 15.5 用户授权与台阶一提交交付
+
+用户在技术复审通过后明确指示“提交并推送”，按职责分三次交付：
+
+| 提交 | 内容 |
+| --- | --- |
+| `c50c07c` | EvaluatorOptimizer 示例、手写对照与 9 项测试 |
+| `c1b368e` | Debate 示例、手写并发清理对照与 12 项测试 |
+| 本节所在文档提交 | 同步 README、AGENTS 与唯一实施计划中的范围、复审和交付状态 |
+
+交付前核对 7 个变更文件的范围、Python 语法、空白及本地文档链接；src/、依赖和既有验证日志均未改变。
+实施与独立复审结果分别保留在 §15.3、§15.4；复审后未改代码或测试，提交阶段未重复运行 pytest。
+两个示例与测试已推送 origin/main，服务器端核验至 `c1b368e1615c74a75ef02f8a80f0b3e07bb79202`；
+本节随独立文档提交交付，最终 main 提交号及工作树状态在本轮交付汇报中核验。
+本次授权仅完成台阶一提交推送，不启动台阶二、台阶三或新增核心能力。

@@ -5,13 +5,13 @@ NOOA 之上的轻量协作模式与组合库，工作名暂定 `nooa-patterns`�
 NOOA 负责 Agent 执行、策略、模型调用、对象状态、原生校验和事件历史；
 本项目负责成员调用边界、显式参数桥接与普通 Python 协作逻辑。
 
-## 当前里程碑：M7（技术复审通过，已提交推送）
+## 当前阶段：台阶一（技术复审通过，已提交推送）
 
 M1 提供两个手写顺序流程、`TeamMember` / `Pattern` 协议及基线测试。
 M2 已实现 `as_member` 与 `Sequential`；M3 已实现 `Team`。
 M4 已完成组合示例、隔离等价测试与真实 NOOA Agent + FakeLLMClient 集成。
 
-唯一的 [M0–M7 实施计划与验收基线](docs/IMPLEMENTATION_PLAN.md)
+唯一的 [实施计划与验收基线](docs/IMPLEMENTATION_PLAN.md)
 统一记录交付物、测试命令、当前进度和逐阶段用户确认规则；review 前请先阅读。
 M1–M4 均已通过 reviewer 技术复审，M4 按 Linux / WSL 完整验收基线通过。
 M3 已分次提交并推送，远程提交号已核验；M4 已按用户指示分次提交，交付记录见实施计划 §8.9。
@@ -23,8 +23,11 @@ M6 已按确认的契约实现并完成本地验证，定向 38 项、WSL 禁网
 M6 已提交推送，交付记录见实施计划 §10.8。M7 已按确认的六项契约实现并完成本地验证，见 §11。
 用户提供的 M7 reviewer 报告结论为通过、无阻塞项，独立测试结果见实施计划 §11.7。
 四种基础原语均已完成实现与技术复审；M7 已按用户指示分次提交并推送，交付记录见实施计划 §11.8。
-当前停在 M7，后续工作等待用户确认。
-当前只实现 Loop 与显式反馈评审示例；核心只保留四种基础原语，复合协作放示例和文档，不提前做角色库或应用模板。
+台阶一的两个复合示例、手写对照与本地验证已完成：定向 21 项、WSL 禁网全量 157 项通过，见实施计划 §15。
+用户提供的 reviewer 报告结论为通过、无阻塞项，独立测试结果见实施计划 §15.4。
+台阶一已按用户指示分次提交并推送，交付记录见实施计划 §15.5。
+当前停在台阶一，后续工作等待用户确认；真实 LLM 应用属于尚未授权的台阶二。
+核心只保留四种基础原语，本轮不改库，也不进入真实 LLM 应用或角色库。
 
 当前公共导出为 `TeamMember`、`Pattern`、`Members`、`as_member`、`Sequential`、`Parallel`、`Router`、`Loop`、`Team`。
 `as_member(fn)` 接受 `(task, context) -> Awaitable[result]` 的显式桥接函数；
@@ -36,6 +39,34 @@ Parallel 的 `run` 对空序列明确抛出 `ValueError`。
 `Team(members, Parallel())` 并发调用成员，按成员顺序返回结果列表；失败/取消时取消并等待未完成成员。
 `Team({"name": member, ...}, Router(selector))` 按同步 selector 返回的名称执行一个成员；非映射输入在构造时拒绝。
 `Team(members, Loop(until, max_iterations=3))` 执行完整顺序轮次，轮后检查 until，末结果作为下一轮入口。
+
+## 复合示例（台阶一）
+
+**复合模式以示例形式提供，不进入库的公开接口；需要时复制并按需修改。**
+这些示例使用确定性 fake，不调用真实模型，也不构成文本质量或真实应用效率的验证。
+
+| 示例 | 组合结构与业务数据流 |
+| --- | --- |
+| [EvaluatorOptimizer](examples/composites/evaluator_optimizer.py) | Loop 包含 Sequential 子 Team：Request → 生成 → Draft → 评估 → Evaluation → 反馈转换 → Request |
+| [Debate](examples/composites/debate.py) | Loop 包含 Parallel 提案子 Team与普通裁决成员：State → 两份 Argument → 裁决 → State；后轮读取对手观点和裁决反馈 |
+
+每个文件均提供 `manual`、`composed` 两版，复用相同业务成员；手写 Debate 对照包含失败取消与清理等待。
+例中的 Outcome 是应用在正常返回后构造的观察结果，库的 Team 仍返回 Request / State 业务对象。
+每次运行独立的观察闭包计算轮次与耗尽，失败 / 取消直接传播，不会被转换成耗尽结果。
+
+```powershell
+.venv/Scripts/python.exe -X utf8 examples/composites/evaluator_optimizer.py
+.venv/Scripts/python.exe -X utf8 examples/composites/debate.py
+.venv/Scripts/python.exe -X utf8 -m pytest -p no:cacheprovider tests/test_evaluator_optimizer.py tests/test_debate.py -v
+```
+
+两个文件也支持从项目根目录使用 `python -m examples.composites.evaluator_optimizer` / `python -m examples.composites.debate`。
+跨轮类型转换、辩论消息内容与终止标准由应用定义；原语只负责调用控制。
+同一组合至少在 3 个真实场景重复且契约稳定后，才考虑可选 composites 子包；当前两个 fake 示例不满足此条件。
+本次定向 **21 passed in 0.19s**；Windows 全量 **154 passed, 1 skipped in 0.57s**（既有 NOOA fcntl 限制）；
+WSL 禁网全量 **157 passed in 27.29s，无跳过**。脚本在两平台运行成功，Windows 模块入口也通过。
+验证结果、表达不适与后续授权边界集中记录在[实施计划 §15](docs/IMPLEMENTATION_PLAN.md)。
+台阶一已通过技术复审；实施与 reviewer 的独立运行分别保留在 §15.3、§15.4。
 
 ## 核心抽象
 
@@ -461,4 +492,4 @@ until 读取应用 context 中的审查结果；ReviewRun 只是示例函数的�
 合计 **41 passed in 0.20s**；Windows 全量 **133 passed, 1 skipped in 0.54s**（原 NOOA fcntl 限制）；
 WSL 禁网全量 **136 passed in 25.92s，无跳过**。两平台示例均通过提前、末轮通过和耗尽三种对照。
 完整逐项输出见 [M7_PYTEST.txt](docs/validation/M7_PYTEST.txt)，命令、断言和表达范围判断见
-[实施计划 §11.5–11.6](docs/IMPLEMENTATION_PLAN.md)。M7 技术复审已通过并提交推送，独立复审与交付记录见 §11.7–11.8；后续工作等待用户确认。
+[实施计划 §11.5–11.6](docs/IMPLEMENTATION_PLAN.md)。M7 技术复审已通过并提交推送，独立复审与交付记录见 §11.7–11.8；后续三个台阶的授权与验证见 §15。
