@@ -66,16 +66,16 @@ README 将完整契约按 13 个主题组织，覆盖任务书中的 15 个要�
 | M0 | 前置设计、契约、范围确认；本文件回填记录 | 设计已确认，见 §4 |
 | M1 | 手写基线 + 协议 + 完整文档 | 已实现并通过 reviewer 复审，验证见 §5.4–5.5；用户已确认进入 M2 |
 | M2 | 适配器 + Sequential | 已通过技术复审与补充测试；按用户要求分三次提交并推送，见 §6.7；用户已确认进入 M3 |
-| M3 | Team 容器 | 已通过本地验证与 reviewer 技术复审；按用户要求分次提交并推送，见 §7.6 |
-| M4 | 组合示例 + 等价测试 + NOOA 集成 | 用户已授权；待 M3 推送核验后开始 |
+| M3 | Team 容器 | 已通过本地验证与 reviewer 技术复审；已分次提交并推送，远程已核验，见 §7.6 |
+| M4 | 组合示例 + 等价测试 + NOOA 集成 | 已通过 Linux/WSL 基线的技术复审，并按用户指示分次提交，见 §8.9；当前停止，后续扩展待确认 |
 
 M1 的导出基线为 `TeamMember`、`Pattern`；M2 增加 `as_member` 与 `Sequential`，M3 增加 `Team`。
-这些 Python 组合能力已经验证，不表示 M4 的应用等价性或真实 NOOA 集成已经验证。
+M4 已完成两条应用微流程的等价对照和真实 NOOA 的公开方法集成，不能将此扩大为真实模型、
+完整应用价值或 NOOA 全部策略与沙箱能力已被验证。
 
-完整 NOOA 运行时尚未安装验证：M1 使用 `--no-deps` 验证本地包构建与导入。
-M2 的纯 Python 适配器和 Sequential 可以用 fake 验证；真实 NOOA Agent 集成属于 M4，
-届时必须完成运行时安装、依赖一致性检查及 FakeLLMClient 测试。
-可提前独立验证依赖环境，但不能把 M4 集成误记为 M1/M2 已完成事项或自动进入下一阶段。
+M1–M3 使用 `--no-deps` 验证本地包与纯 Python 编排。M4 新增完整依赖安装与锁文件，
+并在 Linux / WSL 验证 NOOA 导入、依赖一致性和 FakeLLMClient 原生调用；
+当前上游版本在原生 Windows 上导入 fcntl 失败，详见 §8.5，不混淆安装成功与运行时可用。
 
 ## 4. M0：已确认的前置设计记录
 
@@ -405,8 +405,9 @@ Team、组合应用与真实 NOOA 集成均未实现。
 - 提交前实际全量回归：`python -X utf8 -m pytest -p no:cacheprovider -q`，
   结果为 `29 passed in 0.20s`；`git diff --check` 通过。
 - 实现与契约测试提交：`74ec24e`，`feat: add recursive team composition with contract tests`。
-- 文档独立提交：`docs: record M3 acceptance and M4 authorization`，保留实施与复审的独立记录。
-- 推送后核对实际提交号，再更新 M4 执行状态与依赖验证证据。
+- 文档独立提交：`59b36c4`，`docs: record M3 acceptance and M4 authorization`，保留实施与复审的独立记录。
+- 已推送到 `origin/main`，本地 HEAD 与远程 `refs/heads/main` 均为
+  `59b36c48808a269c3efff8e5523b4777e7f71774`；核验后开始 M4。
 
 ## 8. M4：组合示例 + 等价测试 + NOOA 适配
 
@@ -456,6 +457,148 @@ uv --cache-dir .uv-cache pip check --python .venv/Scripts/python.exe
 汇报组合与手写基线的对比、等价断言、NOOA 适配测试细节、完整实际测试输出，
 以及“是否值得继续扩展”的判断。微型 fake 流程只验证抽象与协调逻辑，
 不能代替真实多智能体应用对价值的验证。新增模式或角色库另行讨论和确认。
+
+### 8.5 M4 实施与依赖环境
+
+授权来源：用户于 2026-10-19 指示“分多次提交并推送，然后开始M4”。
+在 §7.6 的 M3 两次提交推送并核对远程提交号之后开始本阶段，未提前实现后续模式。
+
+交付物：
+
+- `examples/composed_flows.py`：以 Team + Sequential + as_member 重写两个流程，业务函数仍来自
+  `manual_flows.py`；兼容直接脚本运行与作为 examples 模块导入，未修改手写基线。
+- `tests/test_equivalence.py`：3 项测试，覆盖资料报告和通过 / 不通过两种变更意见。
+- `tests/test_nooa_adapter.py`：3 项真实 NOOA 测试，使用公开 Agent、strategy、PredictStrategy、
+  PredictConfig、FakeLLMClient 和事件查询接口，不使用私有 runtime API。
+- `uv.lock`：锁定 75 个跨平台依赖条目，NOOA 为 `0.0.11.dev433`，Git 提交
+  `1454b78c8f0a85c97eab1c6a91cc8cfc95b34de5`。保留 pyproject.toml 原有 main 声明，
+  通过 `uv sync --locked` 使用已解析提交，不在每次验证时追踪分支更新。
+- `docs/validation/M4_PYTEST.txt`：禁网 Linux 完整 pytest 原始输出；README 与 AGENTS 同步当前状态。
+
+环境与安装记录：
+
+1. Windows 执行 `uv --cache-dir .uv-cache sync --python .venv/Scripts/python.exe` 成功，
+   `uv pip check` 检查 75 个包并报告全部兼容。
+2. 随后的 `python -I -c "import nooa"` 失败：上游 `nooa/storage/sqlite.py` 无条件导入
+   Unix `fcntl`，原生 Windows 缺少该模块。没有写 shim、替换模块或修改 NOOA 使其假通过。
+3. 使用机器已有的 Ubuntu-24.04 WSL，Linux uv 0.11.12 位于 `.uv-cache/wsl-tools/uv`；
+   独立虚拟环境位于 `.uv-cache/wsl-venv`，包缓存位于 `.uv-cache/wsl-packages`，均已被忽略。
+   WSL 直连 GitHub 超时后，将本项目 Windows uv 已取得的同一 Git 提交填入 WSL Git 缓存，
+   再运行 `sync --locked` 成功；没有使用或改动只读 NOOA 参考源码进行安装。
+4. WSL 依赖检查报告 74 个包全部兼容；在禁网命名空间下隔离导入 NOOA 成功，
+   版本为 `0.0.11.dev433`，路径位于 WSL 虚拟环境的 site-packages。
+5. 模型响应均由严格响应耗尽模式的 FakeLLMClient 提供；PredictConfig 的 max_retries 为 1，
+   避免用无限 fake 响应掩盖意外调用。客户端由测试的异步上下文管理器关闭。
+   公开 `enable_tracing(exporters=[])` 避免自动 viewer 探测与网络导出；
+   LiteLLM 使用本地模型元数据，测试 fixture 拒绝 IP 连接，并允许 asyncio 的本地 socketpair。
+6. 额外通过 Linux `unshare --net` 隔离整个测试进程的网络；完整验收没有依赖真实模型或凭据。
+
+### 8.6 M4 实际验证记录与断言
+
+本节保留实施时运行记录；当时尚未获得独立 reviewer 技术复审，后续复审结果见 §8.8。
+
+| 验证 | 实际环境 / 命令 | 结果 |
+| --- | --- | --- |
+| 组合示例 | Windows `python -X utf8 examples/composed_flows.py` | 正常退出，报告与意见断言通过，事件分别为 analyze/report、plan/review |
+| 隔离等价测试 | Windows `python -X utf8 -m pytest -p no:cacheprovider tests/test_equivalence.py -v` | `3 passed in 0.15s` |
+| Windows 回归 | `python -X utf8 -m pytest -p no:cacheprovider -q` | `32 passed, 1 skipped in 0.36s`；跳过 fcntl 不可用的 NOOA 集成模块 |
+| Linux 依赖与导入 | `uv pip check`；`unshare --net python -I -X utf8 -c "import nooa"` | 依赖全部兼容，NOOA 导入成功 |
+| 真实 NOOA 定向测试 | WSL Python 3.12.3 / pytest 9.1.1，禁网执行 test_nooa_adapter.py | `3 passed in 102.60s`；首次导入主要受 Windows 挂载盘文件 I/O 影响 |
+| 完整回归 | 同一 WSL 环境，禁网执行全部 tests | `35 passed in 46.14s`，无跳过 |
+| Linux 示例与隔离包导入 | 两种示例、`python -I` 导入五个公开名称，均在禁网环境执行 | 两种示例断言通过；隔离导入成功 |
+
+Linux 实际完整验收命令（在项目根目录的 Linux shell 执行）：
+
+```bash
+UV_PROJECT_ENVIRONMENT=.uv-cache/wsl-venv .uv-cache/wsl-tools/uv --cache-dir .uv-cache/wsl-packages sync --locked --python python3
+.uv-cache/wsl-tools/uv --cache-dir .uv-cache/wsl-packages pip check --python .uv-cache/wsl-venv/bin/python
+set -o pipefail
+unshare --net .uv-cache/wsl-venv/bin/python -X utf8 -m pytest -p no:cacheprovider -v 2>&1 | tee docs/validation/M4_PYTEST.txt
+```
+
+完整实际输出保存在 [M4_PYTEST.txt](validation/M4_PYTEST.txt)，35 = M1 3 + M2 15 + M3 11 + M4 6。
+Windows 的平台跳过不计作 NOOA 集成通过；M4 的完整验收依据是 Linux 35 项全部通过。
+
+等价对照的具体断言：
+
+- 每次分别创建 ResearchContext / ChangeContext 和新的有状态步骤对象，初始 calls 为 0、events 为空。
+- 每次执行仅调用两步；首成员收到该次 task，第二成员收到首成员返回的同一 Analysis / ChangePlan。
+- 同一 context 引用贯穿各次运行的两步，最终结果是末成员返回的同一对象。
+- 跨运行的成员、context 和 events 列表身份不同；跨运行比较中间业务值、最终结果、
+  完整 context 值和事件顺序，均相等；不要求跨运行对象身份相等。
+- 不通过的审查意见也保持两步事件顺序，不增加修改、循环或重审。
+
+NOOA 适配的具体断言：
+
+- 直接调用和 Team + 显式桥接 + as_member 调用分别创建新的真实 ScoringAgent 与 FakeLLMClient。
+- 成功时两者都返回同值的 ScoreCard，fake 仅调用一次且响应已耗尽；
+  请求的 output_model 就是 ScoreCard，消息中包含输入，公开事件查询可取得原生 Task 和 LLMResponse。
+- NOOA agent.context 的对象身份保留；应用 context 仅由显式桥接写入 score，不自动同步。
+- 故意传入 int 违背方法的 str 注解，两条路径抛出相同 TypeError 文本；fake 调用数为 0，响应仍未消耗。
+- 返回非法整数字符串，两条路径均抛原生 GenerationError，其 cause 为 Pydantic ValidationError；
+  score 字段的结构化校验错误相同，fake 恰好调用一次，没有库级重试或错误结果包装。
+- 每个测试检查 IP 连接尝试列表为空；完整进程额外禁网，仍运行成功。
+
+收尾核对：完整执行契约与已提交基线逐字一致，生产源码、pyproject.toml、手写示例与其测试无 diff；
+文档本地链接、锁文件提交号和完整输出中的 35 项通过记录检查成功，`git diff --check` 通过。
+只读 NOOA 参考目录的 1500 个文件 SHA-256 均与本轮快照一致。全量测试后只更新文档，未重复运行测试。
+
+### 8.7 价值判断与停止状态
+
+两个业务场景证明相同的顺序协调可以复用；Team 的递归语义和与 NOOA 原生校验的边界也有实际证据。
+但两步手写 await 本来比构造 Team 更短，不能用这些示例宣称代码量减少或完整应用效率提升。
+
+建议保留已验证的薄组合内核，下一步用一个实际 NOOA 应用验证复用价值，
+只在再次出现相同协调需求时添加能力；当前没有证据支持提前扩展更多 Pattern 或角色库。
+Predict 路径通过也不等于已覆盖 NOOA 的全部 CodeAct、沙箱、MCP 或 Skill 行为。
+
+本阶段未修改生产库 API、原有手写基线、完整执行契约或 NOOA 参考源码。
+M4 后续技术复审已通过，见 §8.8；用户随后指示提交推送，交付记录见 §8.9。后续扩展另行确认。
+
+### 8.8 Reviewer M4 技术复审结论
+
+来源：用户提供的《M4 Review 报告》。以下为 reviewer 的独立运行记录，
+与 §8.6 的实施运行分别保留；未用本次文档更新覆盖原始 M4_PYTEST.txt 或冒充新执行的测试。
+
+- **结论：通过，按 Linux / WSL 35 项全部通过的 M4 验收基线，无阻塞项。**
+- 组合示例、隔离等价测试、真实 NOOA Agent + 公开 FakeLLMClient 集成、锁文件与验证证据均符合要求。
+- reviewer 报告的独立结果：
+
+| 验证 | reviewer 报告的结果 |
+| --- | --- |
+| Windows 组合示例 | 正常退出，两条流程断言通过 |
+| Windows 等价测试 | `3 passed in 0.05s` |
+| Windows 回归 | `32 passed, 1 skipped in 0.22s`；跳过 NOOA 集成模块 |
+| WSL 禁网完整回归 | `35 passed in 59.00s`，无跳过 |
+| WSL 其他检查 | 两种示例、隔离公共 API 导入及 NOOA 导入通过；74 个已安装包依赖全部兼容 |
+
+reviewer 复现了锁定 NOOA 在原生 Windows 上的 fcntl 导入失败，确认项目未使用 shim、
+替换模块或修改 NOOA 伪装通过。这是当前基线已记录的上游平台限制；
+如后续把原生 Windows NOOA 运行列为产品硬要求，需要另行决策，不能视为现已支持。
+
+reviewer 未发现生产 API、契约、作用域或测试隔离问题，支持保留薄内核并用真实应用继续验证价值。
+该复审基于当时的 M4 工作树；当时新增示例、两个测试、uv.lock、原始输出及文档尚未提交，
+reviewer 建议后续提交时一并保留这些可追溯证据。后续执行见 §8.9。
+
+该复审本身不构成用户最终验收、提交推送或后续扩展的指示。之后的提交推送授权见 §8.9。
+
+### 8.9 M4 分次提交与交付
+
+用户于 2026-10-19 明确指示“提交并推送”。本次按职责分组提交已复审内容，
+未改变已验证的代码、锁文件或原始测试证据，未开始后续应用或模式扩展。
+
+| 分组 | 提交 | 内容 |
+| --- | --- | --- |
+| 组合示例与等价对照 | `d4d1b76`：`feat(examples): compose sequential baselines with teams` | composed_flows.py 与 test_equivalence.py |
+| 原生 NOOA 集成与依赖证据 | `59d2c89`：`test: lock and verify native NOOA integration` | test_nooa_adapter.py、uv.lock 与 M4_PYTEST.txt |
+| 验收与交付文档 | `docs: record M4 acceptance and delivery` | README、AGENTS 与实施计划，包括实施和 reviewer 独立运行记录 |
+
+提交前已核对：生产库与 M3 基线无 diff、锁定提交号正确、原始证据包含 35 项通过且无跳过，
+新文件无尾随空白，`git diff --check` 通过。此次仅整理提交与更新文档，未重复运行 pytest；
+此前实施与 reviewer 的验证结果分别保留在 §8.6、§8.8。
+
+推送目标为 `origin/main`，推送后核对本地 HEAD、远程跟踪分支与服务器端 main 提交号；
+实际推送结果在本次交付回复中报告，Git 历史是提交与远程状态的可追溯依据。
 
 ## 9. Reviewer 如何判定问题
 

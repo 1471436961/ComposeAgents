@@ -5,16 +5,17 @@ NOOA 之上的轻量协作模式与组合库，工作名暂定 `nooa-patterns`�
 NOOA 负责 Agent 执行、策略、模型调用、对象状态、原生校验和事件历史；
 本项目负责成员调用边界、显式参数桥接与普通 Python 协作逻辑。
 
-## 当前里程碑：M3（技术复审通过）
+## 当前里程碑：M4（技术复审通过：Linux / WSL）
 
 M1 提供两个手写顺序流程、`TeamMember` / `Pattern` 协议及基线测试。
-M2 已实现 `as_member` 与 `Sequential`，已分次提交并推送；M3 已实现 `Team`，
-组合示例、等价测试及真实 NOOA Agent 集成在 M4 完成。
+M2 已实现 `as_member` 与 `Sequential`；M3 已实现 `Team`。
+M4 已完成组合示例、隔离等价测试与真实 NOOA Agent + FakeLLMClient 集成。
 
 完整的 [M0–M4 实施计划与验收基线](docs/IMPLEMENTATION_PLAN.md)
 记录了交付物、测试命令、当前进度和逐阶段用户确认规则；review 前请先阅读。
-M1–M3 均已通过 reviewer 技术复审。用户已授权分次提交并推送 M3，再开始 M4；
-完成推送核验后，按实施计划 §8 验证组合流程与真实 NOOA 调用。
+M1–M4 均已通过 reviewer 技术复审，M4 按 Linux / WSL 完整验收基线通过。
+M3 已分次提交并推送，远程提交号已核验；M4 已按用户指示分次提交，交付记录见实施计划 §8.9。
+当前停止，后续扩展另行确认。
 
 当前公共导出为 `TeamMember`、`Pattern`、`as_member`、`Sequential`、`Team`。
 `as_member(fn)` 接受 `(task, context) -> Awaitable[result]` 的显式桥接函数；
@@ -70,11 +71,32 @@ uv --cache-dir .uv-cache pip install --python .venv/Scripts/python.exe --no-deps
 M1–M3 的纯 Python 编排验证可使用 `--no-deps` 安装本地包，暂不安装 NOOA 运行时。
 pytest 配置会加入 `src` 和项目根目录，以便验证标准库协议与手写基线。
 `pyproject.toml` 已声明 NOOA 的 Git 依赖；
-后续 NOOA 集成里程碑将安装并验证该依赖。完整开发环境使用 `uv sync`。
+`uv.lock` 锁定此次解析的 NOOA 提交与依赖版本，完整开发环境使用 `uv sync --locked`。
 
 Windows 管道输出中文时可使用 `python -X utf8 examples/manual_flows.py`。
 若 pytest 缓存目录不可写，可用 `python -m pytest -p no:cacheprovider` 完成测试，
 该选项仅关闭测试缓存，不改变测试收集或断言。
+
+### M4 完整验证环境：Linux / WSL
+
+当前锁定的 NOOA 为 `0.0.11.dev433`，提交
+`1454b78c8f0a85c97eab1c6a91cc8cfc95b34de5`。该上游版本的 SQLite 模块直接导入
+Unix `fcntl`，原生 Windows 上 `import nooa` 会失败；依赖检查通过不代表运行时可导入。
+Windows 可运行本库的普通 Python 测试，NOOA 集成模块会明确报告平台跳过；
+完整 M4 验收必须在 Linux / WSL 运行且无跳过，不修改或替换 NOOA 核心模块。
+
+在 Linux / WSL 的项目根目录执行（需已安装 Linux 版 uv，Python 3.12）：
+
+```bash
+UV_PROJECT_ENVIRONMENT=.uv-cache/wsl-venv uv --cache-dir .uv-cache/wsl-packages sync --locked --python python3.12
+uv --cache-dir .uv-cache/wsl-packages pip check --python .uv-cache/wsl-venv/bin/python
+.uv-cache/wsl-venv/bin/python -X utf8 examples/composed_flows.py
+.uv-cache/wsl-venv/bin/python -X utf8 -m pytest -p no:cacheprovider -v
+```
+
+两种系统使用独立虚拟环境，WSL 环境和缓存都放在已忽略的 `.uv-cache/` 中。
+集成测试通过公开 `enable_tracing(exporters=[])` 关闭自动 viewer 探测与网络导出，
+使用本地模型元数据和严格响应耗尽的 `FakeLLMClient`，并拒绝测试中的 IP 连接。
 
 ## 两个手写顺序流程
 
@@ -248,8 +270,36 @@ M3 定向验收命令：
 
 M3 实施时定向测试 **11 passed in 0.20s**，M1–M3 全量回归 **29 passed in 0.21s**。
 `python -I` 下公开 Team API 的递归调用也通过。共享 Pattern、子 Team 保留自身 Pattern、
-异构结果交接等具体断言见实施计划 §7.4。真实 NOOA Agent 集成与应用等价测试留在 M4。
+异构结果交接等具体断言见实施计划 §7.4；M4 的集成与等价测试结果见下节。
 
 用户提供的 M3 reviewer 报告结论为通过，无阻塞项；其独立运行结果为定向测试
 **11 passed in 0.15s**、全量回归 **29 passed in 0.21s**，隔离导入与递归调用通过。
 这与实施时运行分别记录，详见实施计划 §7.5；后续用户授权与提交安排见 §7.6。
+
+### M4 结果与对照
+
+[组合示例](examples/composed_flows.py) 用 Team + Sequential + as_member 替换两个手写流程的
+顺序协调，继续调用同一份业务函数。输入、中间 Analysis / ChangePlan、最终报告 / ReviewOpinion
+以及业务 context 的含义保持不变；不通过的审查意见仍直接返回，不触发修改或重审。
+
+- [等价测试](tests/test_equivalence.py)：3 项通过。每次运行重新创建 context 和有状态 fake；
+  跨运行比较结果、顺序与 context 业务值，引用身份只在各次运行内部检查。
+- [真实 NOOA 适配测试](tests/test_nooa_adapter.py)：3 项通过。公开 PredictStrategy 驱动真实 Agent，
+  FakeLLMClient 提供全部响应；验证输出 schema、原生 Task / LLMResponse 事件、输入拒绝、输出拒绝，
+  以及直接调用与 Team 适配调用的校验行为一致。
+- WSL Ubuntu 24.04 / Python 3.12.3 / pytest 9.1.1：禁网运行完整回归，
+  **35 passed in 46.14s，无跳过**。两种示例与隔离包导入均通过。
+- 原生 Windows：**32 passed, 1 skipped in 0.36s**；跳过的是因上游 fcntl 导入失败而无法运行的
+  NOOA 集成模块，不能代替上述 Linux 完整验收。
+
+完整原始输出见 [M4_PYTEST.txt](docs/validation/M4_PYTEST.txt)，安装与验证命令、具体断言见
+[实施计划 §8.5–8.8](docs/IMPLEMENTATION_PLAN.md)。M4 未修改生产库 API 或 NOOA 参考源码。
+
+用户提供的 M4 reviewer 报告结论为通过，无当前基线的阻塞项。其独立运行记录为：
+WSL 禁网回归 **35 passed in 59.00s，无跳过**，Windows 回归
+**32 passed, 1 skipped in 0.22s**，Windows 等价测试 **3 passed in 0.05s**。
+这些结果与上述实施运行分别保留，详见实施计划 §8.8。原生 Windows 的 NOOA 限制仍然存在，
+本次复审不代表已实现原生 Windows NOOA 支持或已授权后续扩展。
+
+目前值得保留薄组合内核并继续用真实应用验证；两步流程的手写 await 本来更短，
+这些微型示例不能证明应增加更多 Pattern 或角色库。下一步应由实际重复需求决定扩展。
