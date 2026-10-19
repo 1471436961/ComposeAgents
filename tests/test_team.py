@@ -1,11 +1,10 @@
 """Recursive Team contracts using ordinary fake members and Patterns."""
 
 import asyncio
-from collections.abc import Sequence
 
 import pytest
 
-from nooa_patterns import Sequential, Team, TeamMember
+from nooa_patterns import Members, Sequential, Team
 
 
 class _ResultMember:
@@ -22,7 +21,7 @@ class _FirstOnly:
     """A stateless test-only Pattern with different behavior from Sequential."""
 
     async def run(
-        self, members: Sequence[TeamMember], task: object, context: object
+        self, members: Members, task: object, context: object
     ) -> object:
         return await members[0].execute(task, context)
 
@@ -32,7 +31,7 @@ def test_empty_members_are_rejected_at_construction() -> None:
         Team(members=[], pattern=Sequential())
 
 
-def test_member_sequence_is_a_tuple_snapshot_with_original_instances() -> None:
+def test_member_sequence_is_a_members_snapshot_with_original_instances() -> None:
     first = _ResultMember(object())
     second = _ResultMember(object())
     replacement = _ResultMember(object())
@@ -42,7 +41,8 @@ def test_member_sequence_is_a_tuple_snapshot_with_original_instances() -> None:
 
     source[:] = [replacement]
 
-    assert isinstance(team.members, tuple)
+    assert isinstance(team.members, Members)
+    assert team.members is team.members
     assert len(team.members) == 2
     assert team.members[0] is first
     assert team.members[1] is second

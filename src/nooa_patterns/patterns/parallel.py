@@ -1,9 +1,9 @@
 """Concurrent member calls with ordered results and cancellation cleanup."""
 
 import asyncio
-from collections.abc import Sequence
-from typing import Any
+from typing import Any, ClassVar
 
+from ..members import Members
 from ..protocols import TeamMember
 
 
@@ -30,9 +30,11 @@ class Parallel:
     locally, so the Pattern has no execution state and can be reused.
     """
 
+    requires_named_members: ClassVar[bool] = False
+
     async def run(
         self,
-        members: Sequence[TeamMember],
+        members: Members,
         task: Any,
         context: Any,
     ) -> list[Any]:

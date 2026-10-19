@@ -1,9 +1,8 @@
 """Sequential result handoff using ordinary async calls."""
 
-from collections.abc import Sequence
-from typing import Any
+from typing import Any, ClassVar
 
-from ..protocols import TeamMember
+from ..members import Members
 
 
 class Sequential:
@@ -21,9 +20,11 @@ class Sequential:
     the caller's responsibility under the weakly typed TeamMember protocol.
     """
 
+    requires_named_members: ClassVar[bool] = False
+
     async def run(
         self,
-        members: Sequence[TeamMember],
+        members: Members,
         task: Any,
         context: Any,
     ) -> Any:

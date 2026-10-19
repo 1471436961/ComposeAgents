@@ -1,7 +1,8 @@
 """弱类型协作边界；仅定义协议，不实现编排或 NOOA 执行机制。"""
 
-from collections.abc import Sequence
-from typing import Any, Protocol
+from typing import Any, ClassVar, Protocol
+
+from .members import Members
 
 
 class TeamMember(Protocol):
@@ -54,13 +55,23 @@ class TeamMember(Protocol):
     固定配置与可变执行状态应区分；Sequential、Parallel 不需要配置字段。
     本协议不能自动证明第三方 Pattern 遵守无状态约定。
 
-    Team 构造时取成员序列的 tuple 快照，保留成员引用，不复制、不重置。
-    原始 list 的修改不改变 Team，首版没有动态增删成员接口。
+    Team 接受成员序列或字符串名称映射，构造时取浅快照并统一保存为只读 Members。
+    Members 迭代成员而不是名称，保留顺序、名称和成员引用，支持整数或名称访问及 has_name。
+    原始 list/dict 的修改不改变 Team，不复制、不重置成员，没有动态增删接口。
+    requires_named_members 是 Pattern 的固定类声明，默认 False；Router 为 True。
+    Team 构造时拒绝把非 Mapping 交给要求命名的 Pattern，不靠运行时猜测业务语义。
     多个 Team 共享成员时仍是同一个有状态实例；重复执行不会自动创建干净会话。
     首版不承诺同一 Team 并发调用安全；Pattern 无状态不保证成员或 context 并发安全。
     空 Team 在构造时抛出 ValueError；Pattern 的成员序列前提为非空。
     单成员 Sequential 原样返回该成员的结果；单成员 Parallel 返回单元素列表。
     直接 Parallel.run 也对空成员抛 ValueError，不改变 Sequential 对直接空序列不作保证的边界。
+
+    Router 的 selector 是 Callable[[Any, Any], str]，每次同步调用一次，选择一个名称。
+    selector 应是纯函数式的同步决策，不应调用 LLM 或做 I/O；模型决策应由前置异步成员完成，
+    selector 只读其产物。库不推断或兼容异步 selector；非字符串返回值抛 TypeError。
+    未命中抛 LookupError，消息包含返回名称和有序可用名称列表；selector 异常原样传播。
+    被选成员收到同一个 task/context，其结果原样返回，包括 None；其他成员不执行。
+    Router 不注入 context、包装结果、重试或回滚，取消传到被选成员；选中子 Team 保留自身 Pattern。
 
     允许嵌套与成员复用；子 Team 保留自己的 Pattern，不扁平化。
     不支持直接或间接自调用造成无限递归，首版没有完整图校验器。
@@ -83,25 +94,32 @@ class Pattern(Protocol):
     本协议提供 run，不是 TeamMember 的子类型；仅实现 run 不满足成员的 execute 协议。
     Team 的 execute 委托 run 并直接返回业务结果，Pattern 自身不因此成为 Team 成员。
 
-    Pattern 必须无执行状态并可复用。同一 Sequential 或 Parallel 实例可被多个 Team 共享。
+    Pattern 必须无执行状态并可复用。同一 Sequential、Parallel 或 Router 可被多个 Team 共享。
     当前输入、进度、临时结果、异常不得保存到实例字段或其他共享可变存储。
-    未来固定配置应与执行状态区分；Sequential、Parallel 没有配置字段。
+    固定配置应与执行状态区分；Router 保存 selector，不保存本次选择或结果。
     无状态是实现者的约定，Protocol 不会自动验证它。
 
-    members 是非空成员序列，成员按引用调用；Team 在构造时固定 tuple 快照。
+    members 是非空 Members，保存构造时的浅快照，按原顺序迭代成员并保留成员引用。
+    requires_named_members 是固定类声明，默认 False；Router 声明 True。
+    Team 构造时对要求命名但输入非 Mapping 的配置抛 ValueError。
+    Protocol 默认值不会自动赋给结构类型；Team 将未声明属性的旧自定义 Pattern 按 False 处理。
     task 与 context 按 TeamMember 的契约传递，不由库复制、转换或注入额外字段。
     返回此次协作的业务结果，Team 原样返回它；None 也是普通业务结果。
     异常和取消直接传播，不重试整个流程、不回滚副作用，不内置超时或管理资源。
     子 Team 保留自己的 Pattern；不支持无限递归，也不承诺同一 Team 并发安全。
     Parallel 共享入口 task/context，按成员顺序返回业务结果 list；失败或取消时取消并等待
     未完成兄弟任务，传播原失败或 CancelledError。并发修改与成员重入安全属于调用者。
+    Router 用同步 selector 选一个名称，按 TeamMember 中的完整路由契约调用一个成员；
+    直接 run 也要求非空命名 Members，不改变 Team 构造时提前检查的职责。
 
     Pattern 控制成员之间的协作，NOOA Strategy 控制单个生成方法的执行。
     """
 
+    requires_named_members: ClassVar[bool] = False
+
     async def run(
         self,
-        members: Sequence[TeamMember],
+        members: Members,
         task: Any,
         context: Any,
     ) -> Any:
