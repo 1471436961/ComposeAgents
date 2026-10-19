@@ -5,21 +5,23 @@ NOOA 之上的轻量协作模式与组合库，工作名暂定 `nooa-patterns`�
 NOOA 负责 Agent 执行、策略、模型调用、对象状态、原生校验和事件历史；
 本项目负责成员调用边界、显式参数桥接与普通 Python 协作逻辑。
 
-## 当前里程碑：M2（技术复审通过）
+## 当前里程碑：M3（技术复审通过）
 
 M1 提供两个手写顺序流程、`TeamMember` / `Pattern` 协议及基线测试。
-M2 已实现 `as_member` 与 `Sequential`；`Team` 在 M3 实现，
+M2 已实现 `as_member` 与 `Sequential`，已分次提交并推送；M3 已实现 `Team`，
 组合示例、等价测试及真实 NOOA Agent 集成在 M4 完成。
 
 完整的 [M0–M4 实施计划与验收基线](docs/IMPLEMENTATION_PLAN.md)
 记录了交付物、测试命令、当前进度和逐阶段用户确认规则；review 前请先阅读。
-M1 与 M2 均已通过 reviewer 技术复审；M2 的评审后测试补充已验证，等待用户确认进入 M3。
+M1–M3 均已通过 reviewer 技术复审。用户已授权分次提交并推送 M3，再开始 M4；
+完成推送核验后，按实施计划 §8 验证组合流程与真实 NOOA 调用。
 
-当前公共导出为 `TeamMember`、`Pattern`、`as_member`、`Sequential`。
+当前公共导出为 `TeamMember`、`Pattern`、`as_member`、`Sequential`、`Team`。
 `as_member(fn)` 接受 `(task, context) -> Awaitable[result]` 的显式桥接函数；
 `await Sequential().run(members, task, context)` 逐级交接结果。
 直接调用 `run` 时，成员非空是调用前提；空序列调用不受支持，行为不保证。
-空 Team 的构造检查留在 M3。
+`Team(members, pattern)` 在构造时拒绝空成员；`members` 是只读的 tuple 快照，成员保持原实例引用。
+`await team.execute(task, context)` 委托 Pattern，子 Team 保留自己的 Pattern，业务结果原样返回。
 
 ## 核心抽象
 
@@ -44,7 +46,7 @@ async def run(self, members: Sequence[TeamMember], task: Any, context: Any) -> A
 
 Pattern 提供 `run`，TeamMember 提供 `execute`；满足 Pattern 协议不代表满足成员协议。
 Pattern 复用下文的数据、引用、异常与副作用约定，不是 TeamMember 的子类型。
-M1 定义两个协议；M2 已实现适配与 Sequential，Team 容器由 M3 实现。
+M1 定义两个协议；M2 实现适配与 Sequential；M3 实现可递归的 Team 容器。
 
 ## 运行手写基线与测试
 
@@ -65,7 +67,7 @@ uv --cache-dir .uv-cache pip install --python .venv/Scripts/python.exe --no-deps
 .venv/Scripts/python.exe -m pytest
 ```
 
-M1/M2 的纯 Python 编排验证可使用 `--no-deps` 安装本地包，暂不安装 NOOA 运行时。
+M1–M3 的纯 Python 编排验证可使用 `--no-deps` 安装本地包，暂不安装 NOOA 运行时。
 pytest 配置会加入 `src` 和项目根目录，以便验证标准库协议与手写基线。
 `pyproject.toml` 已声明 NOOA 的 Git 依赖；
 后续 NOOA 集成里程碑将安装并验证该依赖。完整开发环境使用 `uv sync`。
@@ -232,8 +234,22 @@ M2 定向验收命令：
 .venv/Scripts/python.exe -X utf8 -m pytest -p no:cacheprovider tests/test_adapters.py tests/test_sequential.py -v
 ```
 
-评审后增加适配器异步类方法与单成员结果身份测试，最新实际结果为 M2 定向测试
+M2 评审后增加适配器异步类方法与单成员结果身份测试，当时实际结果为 M2 定向测试
 **15 passed in 0.19s**，M1+M2 全量回归 **18 passed in 0.17s**。
 初始实施与 reviewer 的 13/16 项结果作为历史记录单独保留。
 `python -I` 隔离模式下公共 API 导入与适配器/Sequential 联合调用已在首次实施和 reviewer 验证中通过。
 完整命令、断言与阶段记录见实施计划 §6.4–6.6。
+
+M3 定向验收命令：
+
+```powershell
+.venv/Scripts/python.exe -X utf8 -m pytest -p no:cacheprovider tests/test_team.py -v
+```
+
+M3 实施时定向测试 **11 passed in 0.20s**，M1–M3 全量回归 **29 passed in 0.21s**。
+`python -I` 下公开 Team API 的递归调用也通过。共享 Pattern、子 Team 保留自身 Pattern、
+异构结果交接等具体断言见实施计划 §7.4。真实 NOOA Agent 集成与应用等价测试留在 M4。
+
+用户提供的 M3 reviewer 报告结论为通过，无阻塞项；其独立运行结果为定向测试
+**11 passed in 0.15s**、全量回归 **29 passed in 0.21s**，隔离导入与递归调用通过。
+这与实施时运行分别记录，详见实施计划 §7.5；后续用户授权与提交安排见 §7.6。

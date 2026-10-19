@@ -65,12 +65,12 @@ README 将完整契约按 13 个主题组织，覆盖任务书中的 15 个要�
 | --- | --- | --- |
 | M0 | 前置设计、契约、范围确认；本文件回填记录 | 设计已确认，见 §4 |
 | M1 | 手写基线 + 协议 + 完整文档 | 已实现并通过 reviewer 复审，验证见 §5.4–5.5；用户已确认进入 M2 |
-| M2 | 适配器 + Sequential | 已通过 reviewer 技术复审，见 §6.5；评审后的测试补充也通过验证，见 §6.6；等待用户确认进入 M3 |
-| M3 | Team 容器 | 未开始 |
-| M4 | 组合示例 + 等价测试 + NOOA 集成 | 未开始 |
+| M2 | 适配器 + Sequential | 已通过技术复审与补充测试；按用户要求分三次提交并推送，见 §6.7；用户已确认进入 M3 |
+| M3 | Team 容器 | 已通过本地验证与 reviewer 技术复审；按用户要求分次提交并推送，见 §7.6 |
+| M4 | 组合示例 + 等价测试 + NOOA 集成 | 用户已授权；待 M3 推送核验后开始 |
 
-M1 的导出基线为 `TeamMember`、`Pattern`；M2 已增加 `as_member` 与 `Sequential`。
-README/docstring 对后续 Team 行为的说明是设计契约，不是 Team 已经实现的证据。
+M1 的导出基线为 `TeamMember`、`Pattern`；M2 增加 `as_member` 与 `Sequential`，M3 增加 `Team`。
+这些 Python 组合能力已经验证，不表示 M4 的应用等价性或真实 NOOA 集成已经验证。
 
 完整 NOOA 运行时尚未安装验证：M1 使用 `--no-deps` 验证本地包构建与导入。
 M2 的纯 Python 适配器和 Sequential 可以用 fake 验证；真实 NOOA Agent 集成属于 M4，
@@ -211,7 +211,7 @@ M2 不实现 Team，不要求真实 NOOA Agent 集成，不开始 M3。
 ### 6.4 M2 首次实施与验证记录
 
 授权来源：用户于 2026-10-19 明确指示“开始M2”。本节为首次实施的历史记录；
-后续 reviewer 结论和测试补充分别见 §6.5、§6.6，用户尚未授权 M3。
+后续 reviewer 结论和测试补充分别见 §6.5、§6.6，当时尚未授权 M3；其后授权见 §6.7。
 
 已交付：
 
@@ -285,8 +285,21 @@ Team、组合应用与真实 NOOA 集成均未实现。
 | M2 定向 | `.venv/Scripts/python.exe -X utf8 -m pytest -p no:cacheprovider tests/test_adapters.py tests/test_sequential.py -v` | `15 passed in 0.19s` |
 | M1+M2 全量 | `.venv/Scripts/python.exe -X utf8 -m pytest -p no:cacheprovider -v` | `18 passed in 0.17s` |
 
-当前测试数量为适配器 7 项、Sequential 8 项、M1 基线 3 项。
-没有新增依赖、真实模型或网络调用。M2 保持停止状态，等待用户确认进入 M3。
+该次运行的测试数量为适配器 7 项、Sequential 8 项、M1 基线 3 项。
+没有新增依赖、真实模型或网络调用。之后的 M3 授权与提交记录见 §6.7。
+
+### 6.7 M2 分次提交、推送与 M3 授权
+
+用户于 2026-10-19 明确要求：“分多次提交并推送，然后开始M3”。
+先完成三次提交并推送后，才开始 M3：
+
+- `17b86d9` — `feat: add explicit callable member adaptation`
+- `f4ae217` — `feat: add stateless sequential collaboration`
+- `08a3da9` — `docs: record M2 acceptance and review follow-up`
+
+已推送至 `https://github.com/1471436961/ComposeAgents` 的 `main`。
+远程 `main` 与本地提交 `08a3da9a75def0ddf6f2f70d0bd4d1e22ea902e4` 已核对一致，
+开始 M3 前工作区干净。环境与缓存目录未纳入提交。
 
 ## 7. M3：Team 容器
 
@@ -318,6 +331,82 @@ Team、组合应用与真实 NOOA 集成均未实现。
 
 汇报 Team 最终内容、实际测试输出，以及 Pattern 共享和异构嵌套测试的具体断言；然后停止。
 不开始组合应用、等价测试或真实 NOOA 集成。
+
+### 7.4 M3 实施与验证记录
+
+授权来源：用户于 2026-10-19 指示先分次提交并推送 M2，再开始 M3。
+§6.7 的推送和远程提交号核验完成后，实施了本阶段。本节保留实施时验证结果，
+后续 reviewer 复审见 §7.5；当时停在 M3 等待用户确认，后续授权见 §7.6。
+
+交付物：
+
+- `src/nooa_patterns/team.py`：普通 Python Team，不继承 NOOA Agent；只依赖两个公开协议。
+- 构造时取成员 tuple 快照，空成员即 `ValueError`；`members` 只读属性返回该快照，成员对象不复制。
+- `pattern` 保存传入对象引用；`execute` 只委托 `pattern.run` 并直接返回业务结果。
+- 根包增加 `Team` 导出。Sequential docstring 将 Team 构造检查从未来描述改为已实现描述。
+- `tests/test_team.py`：11 项用例，含 `None` / 对象两种单成员结果。
+- README、AGENTS 与实施计划同步更新到 M3 本地验证完成、等待 M4 授权。
+
+实际执行结果（Windows / Python 3.12.14 / pytest 9.1.1）：
+
+| 验证 | 命令 / 内容 | 实际结果 |
+| --- | --- | --- |
+| M3 定向 | `.venv/Scripts/python.exe -X utf8 -m pytest -p no:cacheprovider tests/test_team.py -v` | `11 passed in 0.20s` |
+| M1–M3 全量回归 | `.venv/Scripts/python.exe -X utf8 -m pytest -p no:cacheprovider -v` | `29 passed in 0.21s` |
+| 隔离递归 API | `python -I -X utf8` 导入五个公开名称，外层 Team 包含子 Team 与适配函数，子/外层共享同一个 Sequential | 输入 `3` 返回 `8`，context 为 `["add", "double"]` |
+
+测试覆盖空成员、tuple 快照与成员身份、单成员结果、跨 Team 共享有状态成员、
+自定义 Pattern 委托、保留子 Team Pattern、共享 Sequential、异构嵌套、异常和取消。
+
+共享 Pattern 测试的具体断言：
+
+- `team_a.pattern is team_b.pattern is pattern`，没有复制 Pattern。
+- A 在首成员的事件上暂停，B 在 A 恢复前完成；B 完成后 A 仍未结束，然后才释放 A。
+- A/B 分别返回 `final_a` / `final_b` 的同一对象。
+- A 的后续成员收到 `middle_a` 与 `context_a`；B 收到 `task_b` / `middle_b` 与 `context_b`。
+- A context 仅为 `["paused", "resumed"]`，B context 仍为空，无相互写入。
+- 两个 Team 使用独立成员与 context，不承诺同一 Team 或同一 Agent 的并发调用安全。
+
+异构嵌套测试的具体断言：
+
+- 子 Team 接收整数 `3`，内部经历 `int → tuple[int, int] → str`，业务输出为 `"3 + 4"`。
+- 外层下一成员接收的就是这个字符串对象，不是中间 tuple 或容器执行状态信封。
+- `received[0] is child_output`，最终 `result is business_result`，结果为 `{"formula": "3 + 4"}`。
+- 同一个 context 记录的顺序为 `["expand", "format", "consume"]`。
+
+另一个嵌套测试令子 Team 使用仅供测试的无状态 `_FirstOnly`，外层使用 Sequential：
+子 Team 的未选中成员不执行，外层后续成员接收选中成员的业务结果，证明没有扁平化子结构。
+该测试 Pattern 不是新增生产模式。
+
+本阶段没有新增依赖、模型/网络调用、图校验器或生命周期管理，也未修改 NOOA 参考源码。
+测试的 5 秒超时仅用于防卡死。M4 的组合示例、应用等价测试与真实 NOOA 集成均未开始。
+
+### 7.5 Reviewer M3 技术复审结论
+
+来源：用户提供的《M3 Review 报告》。以下为 reviewer 报告中的独立验证结果，
+与 §7.4 的实施运行分别记录，不作为本次文档更新中新执行的测试。
+
+- **结论：通过，无 M3 阻塞问题。**
+- reviewer 报告：Team 定向测试 `11 passed in 0.15s`，全量回归 `29 passed in 0.21s`。
+- 隔离模式下五个公共名称导入和递归 Team 冒烟调用通过：输入 `3`，结果 `8`，
+  context 为 `["add", "double"]`。
+- 空成员拒绝、成员快照与引用、单成员、嵌套与自定义 Pattern 委托、共享 Sequential、
+  异构业务结果交接、异常及取消均符合约定；未发现需要返工的实现或文档问题。
+- M3 修改仍在工作树中，尚未提交；这是非阻塞的追溯性事项，不改变技术复审结论。
+- 完整 NOOA 运行时安装、依赖验证和公开 FakeLLMClient 集成仍属于 M4 待办。
+
+该报告本身不构成 M4 授权；用户之后明确确认，见 §7.6。
+
+### 7.6 M3 分次提交与 M4 授权
+
+用户于 2026-10-19 指示“分多次提交并推送，然后开始M4”。执行顺序为先提交与推送 M3，
+核对远程分支后再开始 §8，不把该授权扩展到新增 Pattern 或角色库。
+
+- 提交前实际全量回归：`python -X utf8 -m pytest -p no:cacheprovider -q`，
+  结果为 `29 passed in 0.20s`；`git diff --check` 通过。
+- 实现与契约测试提交：`74ec24e`，`feat: add recursive team composition with contract tests`。
+- 文档独立提交：`docs: record M3 acceptance and M4 authorization`，保留实施与复审的独立记录。
+- 推送后核对实际提交号，再更新 M4 执行状态与依赖验证证据。
 
 ## 8. M4：组合示例 + 等价测试 + NOOA 适配
 
