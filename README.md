@@ -11,6 +11,10 @@ M1 提供两个手写顺序流程、`TeamMember` / `Pattern` 协议及基线测�
 下文描述首版的完整执行契约：`as_member` 与 `Sequential` 在 M2 实现，`Team` 在 M3 实现；
 组合示例、等价测试及真实 NOOA Agent 集成在 M4 完成。当前包仅导出两个协议。
 
+完整的 [M0–M4 实施计划与验收基线](docs/IMPLEMENTATION_PLAN.md)
+记录了交付物、测试命令、当前进度和逐阶段用户确认规则；review 前请先阅读。
+M1 已完成并经 reviewer 复审通过，目前等待用户确认进入 M2。
+
 ## 核心抽象
 
 采用“两个角色 + 一个递归规则 + 一个正交维度”：
