@@ -1,6 +1,9 @@
-# 实施计划与验收基线：M0–M4
+# 实施计划与验收基线：M0–M7
 
-本文件将已由用户确认的设计、M1–M4 实施任务和阶段确认规则落盘，供没有聊天上下文的
+本文件是项目唯一维护的实施计划，统一记录 M0–M7 的范围、契约决定、验证证据与阶段确认规则。
+当前 **M5：Parallel 已通过本地验证与 reviewer 技术复审，用户已指示提交推送**；交付记录见 §9.10，Router、Loop 只规划，不提前实现。
+
+本文件将已由用户确认的设计、M1–M7 实施任务和阶段确认规则落盘，供没有聊天上下文的
 实现者与 reviewer 使用。它记录实施范围，不表示后续里程碑已经获准开始。
 
 ## 1. 阅读顺序与依据
@@ -12,7 +15,8 @@
 
 里程碑范围来自用户“分四个里程碑实现”的任务书；执行语义来自此前已确认的契约修正。
 原始实施任务正式划分的是 **M1–M4**。下文的 **M0 只是对已完成前置设计的回填编号**，
-不新增开发任务、追溯性验收门槛或用户批准。
+不新增开发任务、追溯性验收门槛或用户批准。M4 后用户进一步确认 Parallel → Router → Loop，
+对应 M5–M7，新增阶段仍须逐个获得实现授权。
 
 契约的完整内容保存在 README 和协议 docstring 中，两处都须维护完整内容，这是用户的明确要求。
 本文件只索引关键决定，不另立一份不同的契约。后续用户变更设计或范围时，应同步更新相关文件。
@@ -25,6 +29,15 @@
 项目是 NOOA 生态里的模块化协作与可复用设计模式库，借鉴 `torch.nn` 的组合思想。
 它是独立 Python 扩展包；不新增底层 Agent 执行框架，不重写模型调用、沙箱、
 Agent 状态管理或事件历史，不以 LangGraph / CrewAI 为基础，也不用 TypeScript 重写核心。
+
+核心只提供 Sequential、Parallel、Router、Loop 四种基础控制原语，仍以 NOOA 公开 API 为底座。
+Supervisor、GroupChat、Handoff 不作为标准 Pattern；EvaluatorOptimizer、Voting、Debate、
+PlanExecute、MapReduce、MoA 仅可作为未来 examples / 文档中的组合方式，不预置同名核心类。
+Blackboard、ContractNet、Negotiation 不做。领域角色留待未来应用验证，M5 不创建 roles/。
+模式目录是研究资产，不是逐项实现路线图。
+
+保留 Team 持有成员、Pattern 决定协作的分离，Pattern 不保存本次执行状态。
+弱类型、活引用、无隐式重试/回滚/持久化、资源归调用者和 NOOA 只读边界继续生效。
 
 核心结构：
 
@@ -67,7 +80,10 @@ README 将完整契约按 13 个主题组织，覆盖任务书中的 15 个要�
 | M1 | 手写基线 + 协议 + 完整文档 | 已实现并通过 reviewer 复审，验证见 §5.4–5.5；用户已确认进入 M2 |
 | M2 | 适配器 + Sequential | 已通过技术复审与补充测试；按用户要求分三次提交并推送，见 §6.7；用户已确认进入 M3 |
 | M3 | Team 容器 | 已通过本地验证与 reviewer 技术复审；已分次提交并推送，远程已核验，见 §7.6 |
-| M4 | 组合示例 + 等价测试 + NOOA 集成 | 已通过 Linux/WSL 基线的技术复审，并按用户指示分次提交，见 §8.9；当前停止，后续扩展待确认 |
+| M4 | 组合示例 + 等价测试 + NOOA 集成 | 已通过复审并分三次提交推送，远程 main 已核验为 536fbcb；历史证据见 §8.9 |
+| M5 | 设计 + Parallel | 已通过本地验证与 reviewer 技术复审，无阻塞项；用户已指示提交推送，见 §9.8–9.10；M6 尚未授权 |
+| M6 | Router；聚合后的专业审查选择及手写对照 | 只规划，等待 M5 汇报后的用户确认；见 §10 |
+| M7 | 通用有界 Loop；终止条件与耗尽标记契约 | 只规划，等待 M6 汇报后的用户确认；见 §11 |
 
 M1 的导出基线为 `TeamMember`、`Pattern`；M2 增加 `as_member` 与 `Sequential`，M3 增加 `Team`。
 M4 已完成两条应用微流程的等价对照和真实 NOOA 的公开方法集成，不能将此扩大为真实模型、
@@ -600,7 +616,255 @@ reviewer 建议后续提交时一并保留这些可追溯证据。后续执行�
 推送目标为 `origin/main`，推送后核对本地 HEAD、远程跟踪分支与服务器端 main 提交号；
 实际推送结果在本次交付回复中报告，Git 历史是提交与远程状态的可追溯依据。
 
-## 9. Reviewer 如何判定问题
+## 9. M5：Parallel
+
+用户已授权设计与 Parallel，实现、本地验证与 reviewer 技术复审均已完成，无阻塞项；用户随后指示提交推送，见 §9.10。
+M5 不增加 Router / Loop 源码、测试、导出或占位类，不创建复合模式与协作体系。
+真实 NOOA 集成继续按 Linux / WSL 验收：锁定上游在原生 Windows 导入 fcntl 失败。
+M5 自身使用确定性 fake，不调用真实模型；完整回归保留 M4 的三项真实 NOOA + FakeLLMClient 测试。
+
+### 9.1 入口和成员归属
+
+```python
+Parallel()
+async def run(self, members: Sequence[TeamMember], task: Any, context: Any) -> list[Any]: ...
+Team(members=[...], pattern=Parallel())
+```
+
+Parallel 不持有成员和配置参数。空成员在 **Team 构造时**抛 ValueError，沿用现有容器职责。
+直接调用 Parallel.run 时也拒绝空序列，作为此模式明确的额外边界检查；不改变 Sequential
+对直接空序列调用不作保证的既有约定。
+
+### 9.2 输入、结果和并发
+
+- 所有成员接收调用入口的同一个 task 和同一个 context 引用，不使用前一成员的返回值。
+- task 和 context 都可能被并发修改，调用者负责两者的并发安全；库不加锁、不复制或自动合并。
+- 正常完成时返回新建的结果 list，严格按成员顺序排列，与完成顺序无关。
+- list 中每个元素是对应成员返回的原对象；不复制、不展开子列表，不过滤 None。
+- 单成员返回单元素列表，包含 None 也不特殊处理；该行为不同于单成员 Sequential。
+- 并发指协作式异步执行，不保证 CPU 并行、耗时变短或阻塞代码能及时被取消。
+- 重复引用同一有状态成员仍是同一对象，不保证该对象的并发重入安全。
+
+挑战：只有共同的 execute 签名不能保证成员适合相同输入，也不能保证下游能接收 list。
+异构报告属于业务结果；list[Report] 与一个 Report 是不同的下游契约。
+
+### 9.3 快速失败的精确含义
+
+- 任一成员的异常被调度器观察到后，立即向其他尚未结束的直接子任务发出取消请求。
+- 等待所有本次创建的成员任务结束并取走其异常后，传播原先触发失败的同一个异常对象。
+- 不返回部分结果、不把异常塞进结果列表、不包装为 ExceptionGroup、不重试、不回滚已发生副作用。
+- 多个异常同时出现时，不保证选择成员顺序最靠前者；传播最先被调度器观察到的异常。
+- 取消清理中其他成员再次抛异常，不覆盖原先的业务异常；这些异常仍被取走，避免遗留未处理任务。
+- “快速”指取消决定不等待其他正常工作完成，不承诺异常立即返回。清理必须 await；
+  成员屏蔽取消、阻塞事件循环或清理不结束时，Parallel 也可能继续等待，首版不内置超时。
+
+实现使用显式 asyncio 子任务与 gather；不能只使用默认 gather，因为普通成员失败不会自动取消其余成员。
+也不直接使用 TaskGroup 的默认异常分组行为，以保留既有原异常传播契约。
+内部收集 future 使用 shield，外层取消在 run 内显式转交给子任务，再等待收集 future 与全部子任务；
+shield 不是让成员逃避取消，而是避免成员清理异常把外层 CancelledError 替换掉。
+
+### 9.4 外层与成员取消
+
+- 外层调用被取消时，所有尚未完成的成员任务都收到取消请求，等待结束后向外传播 CancelledError。
+- 已经完成的成员不会被追溯取消，其副作用也不撤销。
+- 成员吞掉取消后正常返回也不会把已取消的整个 run 改成成功。
+- 成员自行取消或抛 CancelledError 同样中止本次汇集，取消其他未完成成员，不作为普通结果返回。
+- 如果清理过程中外层又被取消，取消仍可向上传播，不能把取消包装成业务错误。
+- 只管理本次直接等待的调用链；不接管成员私自创建的后台任务，也不保证外部服务副作用被撤销。
+- 取消正在运行的嵌套 Parallel Team 应递归传入其直接子任务；测试验证这条等待链。
+
+### 9.5 无执行状态与资源
+
+任务列表、当前结果、异常与取消进度全部属于一次 run 的局部变量。
+同一 Parallel 实例可被独立 Team / context 共享；一个运行失败不得取消另一个运行。
+此约定不扩大为同一 Team、同一有状态 Agent 或共享对象的并发安全保证。
+
+### 9.6 验收案例与手写对照
+
+输入为具体业务类型 Proposal(text, goal)，输出按位置组织为：
+
+```text
+[FeasibilityReport, RiskReport, CostReport]
+```
+
+三个普通 fake 异步业务函数各自接收 Proposal 和调用者创建的 ReviewContext。
+共享 context 只承载应用主动写入的观察记录，不要求并发完成顺序固定。
+可用普通函数 aggregate(reports) 生成 AnalysisBundle；它不是 Pattern，也不做路由。
+
+组合版本：Team([as_member(feasibility), as_member(risk), as_member(cost)], Parallel())。
+手写版本显式 create_task 后 await gather，并在失败/取消时取消和等待剩余任务；
+不能用三个串行 await 冒充并发等价对照，也不能用未取消兄弟任务的默认 gather 冒充契约等价。
+两版运行使用新 context 与新的有状态观察成员，业务逻辑相同，跨运行只比较业务值。
+并发事件次序本身不作保证，观察记录比较事件多重集；报告列表仍严格比较成员顺序与各次运行内部身份。
+
+递归在 M5 通过外层 Sequential 包含分析 Parallel 子 Team 和显式聚合成员来验证。
+
+#### 9.6.1 原验收描述中必须修正的两处
+
+1. 分析子 Team 不能直接成为“按 AnalysisBundle 选审查者”的 Router 的一个审查分支：
+   selector 需要先取得分析与聚合产物。完整数据流应为外层 Sequential：
+   **分析 Parallel 子 Team → 普通聚合函数 → Router(安全 / 架构 / 快速审查者)**。
+   Router 仍留到 M6，本轮没有 selector 或审查分支实现。
+2. Proposal → 三种独立 Report 的成员不兼容 Sequential 的逐级交接。
+   直接换模式会让风险成员收到 FeasibilityReport，而不是 Proposal；即使改为能接收，
+   Sequential 的末结果仍不是三报告列表。M5 用输入输出兼容的成员验证“保持成员、替换模式”，
+   并明确断言输出形状不同。M6 若要让同一业务案例可替换，须设计显式业务载体/桥接与聚合，
+   不能修改 Sequential 的既有交接语义或让库猜测、收集被丢弃的中间报告。
+
+最可能出问题的环节是下游聚合的输入形状、共享可变 task/context 的并发修改，以及取消后资源清理。
+这些问题不能靠统一签名或更换 Pattern 自动解决。
+
+### 9.7 文件、顺序与测试
+
+1. 先保存本计划，更新 README / AGENTS 入口，明确只授权 M5。
+2. 实现 src/nooa_patterns/patterns/parallel.py，更新两个包导出，维护 README 和协议完整契约。
+3. tests/test_parallel.py 验证：
+   - 确实重叠运行；反向完成仍按成员顺序汇集，task/context 保持同一引用。
+   - 单成员对象与 None、嵌套列表身份保持；空 Team 构造与直接空 run 拒绝。
+   - 一个成员失败时其余成员真实收到取消；await 清理结束后才传播原异常，副作用保留。
+   - 外层真实 Task.cancel() 传播到全部未完成成员，等待异步清理。
+   - 成员自行取消、多个同时异常、取消清理抛错，以及嵌套 Team 的取消等待链。
+   - 共享同一 Parallel 的独立运行没有任务/异常/取消串扰。
+   - 契约兼容的相同成员可替换 Sequential / Parallel，分别返回业务值 / 业务值列表。
+4. examples/parallel_review.py 保存三分析成员子 Team、普通聚合与手写并发对照。
+   tests/test_parallel_review.py 验证隔离运行的成功与失败对照、异构报告、递归交接。
+5. 实际运行定向测试与示例，再进行一次包含 M4 集成的禁网 WSL 全量回归；
+   完整输出保存 docs/validation/M5_PYTEST.txt，区分 Windows 的平台跳过与 Linux 无跳过结果。
+6. 汇报契约挑战、最终实现、接口、例子、测试结果和剩余设计问题，然后停止。
+
+测试用 asyncio.Event 控制交错与取消，超时只用于防止测试挂死，不靠耗时阈值证明并发。
+不新增依赖、签名推断、可配置失败策略、字典结果或完整图引擎。
+
+### 9.8 实施与本地验证记录
+
+#### 9.8.1 实际交付和边界
+
+先保存本计划与入口，再实现 [Parallel](../src/nooa_patterns/patterns/parallel.py)、
+更新导出、README 和协议完整契约；之后添加 [核心测试](../tests/test_parallel.py)、
+[三分析成员示例](../examples/parallel_review.py) 与 [案例测试](../tests/test_parallel_review.py)。
+Team、Sequential、适配器、M1 手写基线、pyproject.toml、uv.lock 和 M4 原始验证输出未修改。
+没有 Router / Loop 源码、测试、导出或占位类，也未新增依赖、角色库、复合 Pattern。
+
+实现中遇到并修复一处真实的取消边界问题：直接等待 gather 时，外层取消后，成员清理抛出的
+RuntimeError 可能覆盖 CancelledError。新增回归测试先实际失败，再通过 shield 收集 future、
+显式取消并等待全部任务修复；修复后的完整回归见下文。shield 不阻止库向成员转交取消。
+
+#### 9.8.2 关键测试断言
+
+- 17 项核心测试使用 Event 控制交错，不用完成耗时推断并发：三个成员全部开始后才允许完成，
+  让它们反向完成，结果仍按成员顺序且保留原对象身份；同一个 task/context 传到所有成员。
+- 单成员对象 / None 保持单元素列表；中间嵌套列表不展开；空 Team 构造与直接空 run 均抛 ValueError。
+- 业务失败后其他成员真实收到取消，清理阻塞期间 run 不结束；释放清理后传播同一原异常，
+  所有已创建任务结束、既有副作用保留、成员不重试。
+- 外层取消传到全部未完成成员并等待异步清理；自行取消、清理抛错、同时失败、
+  失败清理期间外层取消、吞掉取消等情况均覆盖。嵌套取消到达内外等待链，完成的工作不撤销。
+- 两个 Team 共用同一个 Parallel，B 失败取消自己的成员时，A 的等待成员不受影响，之后正常返回。
+- 相同兼容成员替换 Sequential / Parallel，前者返回业务值，后者返回列表；不宣称任意类型兼容。
+- 5 项案例测试分别使用新的有状态观察成员和 context；跨运行比较业务值与事件多重集，
+  引用身份在每次运行内部检查。失败对照分别验证手写版 / 组合版的兄弟取消。
+- 递归案例使用 Sequential([Parallel 分析子 Team, 显式聚合成员])，子 Team 不扁平化，
+  聚合字段保持对应报告身份；普通业务聚合拒绝报告数量或类型位置错误。
+
+#### 9.8.3 本次实际运行
+
+Windows / Python 3.12.14 / pytest 9.1.1，项目根目录：
+
+```powershell
+.\.venv\Scripts\python.exe -X utf8 examples\parallel_review.py
+# exit 0；Handwritten and composed concurrent analyses passed.
+
+.\.venv\Scripts\python.exe -X utf8 -m pytest -p no:cacheprovider tests/test_parallel.py tests/test_parallel_review.py -v
+# 22 passed in 0.17s
+
+.\.venv\Scripts\python.exe -X utf8 -m pytest -p no:cacheprovider -q
+# 54 passed, 1 skipped in 0.31s
+
+.\.venv\Scripts\python.exe -I -X utf8 -c "from nooa_patterns import Parallel, Pattern, Sequential, Team, TeamMember, as_member; print('isolated six-name import OK')"
+# isolated six-name import OK
+```
+
+Windows 跳过的是锁定 NOOA 无法导入 fcntl 的集成模块，不是本次 22 项测试。
+完整验收继续使用 WSL Ubuntu 24.04 / Python 3.12.3 / pytest 9.1.1：
+
+```bash
+set -o pipefail
+unshare --net .uv-cache/wsl-venv/bin/python -X utf8 -m pytest -p no:cacheprovider -v 2>&1 | tee docs/validation/M5_PYTEST.txt
+# 57 passed in 48.97s，无跳过
+```
+
+57 = 原有 35 + 本次 22，包含三项真实 NOOA + 公开 FakeLLMClient 集成，全部在禁网命名空间中通过。
+原始输出保存于 [M5_PYTEST.txt](validation/M5_PYTEST.txt)，M4 旧记录保持不变。
+与已有 SHA-256 只读参考快照逐一比较，NOOA 的 1,500 文件均未变化，文件集合也无增删。
+
+#### 9.8.4 当前交付状态
+
+M5 已完成实现与本地验证，并通过 reviewer 技术复审（见 §9.9）；用户随后指示提交推送，交付记录见 §9.10。
+当前必须停在 M5。M6 Router 与 M7 Loop 没有授权实现，后续分别澄清 §10、§11 的接口问题再实施。
+
+### 9.9 Reviewer M5 技术复审结论
+
+来源：用户提供的《M5 Review 报告》。结论为 **通过，无 M5 阻塞项**。
+以下是 reviewer 的独立运行记录，与 §9.8.3 的实施运行分别保留；本次状态更新没有重跑测试或覆盖 M5_PYTEST.txt。
+
+| 验证 | reviewer 报告的结果 |
+| --- | --- |
+| Windows M5 定向 | `22 passed in 0.12s` |
+| Windows 全量 | `54 passed, 1 skipped in 0.22s`；跳过仍为上游 fcntl 限制的 NOOA 集成模块 |
+| WSL 禁网完整回归 | `57 passed in 49.49s`，无跳过 |
+| 示例与导入 | Windows / WSL 示例正常退出；六个公共名称隔离导入通过 |
+
+复审确认 Parallel 的引用、结果顺序、快速失败、取消清理、嵌套与独立复用均符合契约，范围未超出 M5。
+空生成器不属于当前 Sequence 参数契约，无需因此扩大接口；Router / Loop 的未决设计留到各自阶段。
+复审本身不构成提交推送或进入 M6 的授权；用户随后明确指示提交推送，见 §9.10。M6 仍未授权，开始时先澄清 §10 的设计边界。
+
+### 9.10 M5 分次提交与交付
+
+用户于 2026-10-19 明确指示“提交并推送”。按职责分三组交付，未开始 M6 / M7：
+
+| 分组 | 提交 | 内容 |
+| --- | --- | --- |
+| Parallel 与核心契约测试 | `285264e`：`feat: add fail-fast parallel team execution` | Parallel、公共导出、协议 docstring、17 项核心测试 |
+| 并发案例与验证证据 | `52be0d4`：`test(examples): verify parallel review composition` | 三分析成员示例、5 项案例测试、M5_PYTEST.txt |
+| 计划、契约与交付文档 | `docs: consolidate roadmap and record M5 acceptance` | README、AGENTS、唯一实施计划；包含用户确认的文档组织原则与独立复审记录 |
+
+提交前核对了变更范围、Python 语法、文档链接和空白；原有 Team / Sequential / 适配器、
+依赖声明、锁文件与 M1 / M4 基线保持不变。代码和测试未在复审后改动，本次未重复运行 pytest；
+实施结果与 reviewer 独立结果分别保留在 §9.8.3、§9.9。
+推送目标为 origin/main，推送后核对本地 HEAD、远程跟踪分支及服务器端 main；最终提交号和推送结果以 Git 与本次交付回复为准。
+
+## 10. M6：Router 的计划与待澄清项（未实现）
+
+用户草案为 Router(selector: Callable[[task, context], str], members: dict[str, TeamMember])：
+按名称只执行选中成员，未命中 LookupError，无默认分支，结果不包装，空成员构造 ValueError。
+selector 是调用者普通函数，模型决策由应用提供，不内置模型选路。
+
+M6 开始前需要澄清：
+
+- members 放在 Router 构造器与现有 Team 持有成员存在双重来源，需要明确归属。
+  固定配置本身不违反 Pattern 无执行状态，但不能模糊结构与协议边界。
+- 普通同步 Callable 返回 str 不能直接 await NOOA 异步决策方法；可由前一步产生决策，
+  再让同步 selector 读取，或明确改变 selector 协议。不能隐式运行事件循环或猜测返回值。
+- 使用§9.6 修正后的完整数据流，并明确模式替换时的业务载体与聚合契约。
+
+M6 单独设计、实施、测试、汇报后停止，不趁 M5 提前写代码。
+
+## 11. M7：Loop 的计划与待澄清项（未实现）
+
+用户草案为 Loop(members, until, max_iterations)：每轮按 Sequential 交接，
+完成整轮后判断 until(result, context)；max_iterations 必须显式给出，
+达到上限返回最后结果并记录 loop_exhausted，不抛耗尽异常，不自动累计每轮历史。
+终止判断属于调用者，库不内置质量或评审语义。
+
+M7 开始前需要澄清：
+
+- 与 Router 相同的成员归属问题；第 2 轮入口应明确为上一轮末结果。
+- 自动写 loop_exhausted 是对 v0“库不向任意 context 注入字段”的明确扩展；
+  任意对象未必能写字段，需明确 context 能力、标记清除/覆盖和嵌套 Loop 相互覆盖的语义。
+- max_iterations 正整数与 bool 边界、最后一轮 until 为真时的耗尽判定、判断函数抛错/取消的行为。
+
+这些是未来契约设计事项，不在 M5 实现，不预置 EvaluatorOptimizer。
+
+## 12. Reviewer 如何判定问题
 
 - 先确认待审阶段，再区分该阶段必交付、未来阶段交付和非阻塞建议。
 - 按实际业务行为、契约与测试证据审查，不把统一签名误判为任意业务组合兼容。
@@ -611,7 +875,7 @@ reviewer 建议后续提交时一并保留这些可追溯证据。后续执行�
 - 轻量导入验证可以核对已安装包；不必为了文档修复添加只镜像实现的 `hasattr` 断言。
 - 尚无 Git 提交时，明确说明审查基于工作树。不能虚构基线 commit 或 diff。
 
-## 10. 已知环境限制与汇报规则
+## 13. 已知环境限制与汇报规则
 
 - Windows 沙箱内 `asyncio` 曾阻塞于 `_fallback_socketpair` / `accept`，
   即使关闭 pytest 缓存也可能发生。遵守平台机制申请沙箱外执行，不改写协程语义绕过验证。
@@ -622,8 +886,12 @@ reviewer 建议后续提交时一并保留这些可追溯证据。后续执行�
 - 审批服务容量不足造成的检查失败不等于判定命令不安全，但命令未执行就不能报告为通过。
 - 测试报告须区分本次实际运行、历史运行和未执行项。历史的 `3 passed` 不能代替新的运行证据。
 
-## 11. 计划维护规则
+## 14. 计划维护规则
 
 每次阶段汇报至少记录：交付文件、实际测试命令和结果、遗留问题、当前停止阶段。
 用户明确批准下一阶段后，更新 §3 状态，再按该阶段范围实施；不要只在聊天中修改计划。
 计划调整须记录用户已经确认的变更，review 建议本身不自动更改阶段范围。
+
+实施计划统一维护在本文件；必要的专题细节可独立成文，通过链接引用，不重复维护计划或阶段状态。
+非必要不新增文档；是否新增由 agent 根据内容与维护需要自行判断，不以更新现有文件为优先规则。
+需要写文档时明确文档层级和职责，合理拆分并通过链接组织，避免内容重复或单篇过于冗长。

@@ -5,24 +5,29 @@ NOOA 之上的轻量协作模式与组合库，工作名暂定 `nooa-patterns`�
 NOOA 负责 Agent 执行、策略、模型调用、对象状态、原生校验和事件历史；
 本项目负责成员调用边界、显式参数桥接与普通 Python 协作逻辑。
 
-## 当前里程碑：M4（技术复审通过：Linux / WSL）
+## 当前里程碑：M5（Parallel 已通过技术复审，按用户指示交付）
 
 M1 提供两个手写顺序流程、`TeamMember` / `Pattern` 协议及基线测试。
 M2 已实现 `as_member` 与 `Sequential`；M3 已实现 `Team`。
 M4 已完成组合示例、隔离等价测试与真实 NOOA Agent + FakeLLMClient 集成。
 
-完整的 [M0–M4 实施计划与验收基线](docs/IMPLEMENTATION_PLAN.md)
-记录了交付物、测试命令、当前进度和逐阶段用户确认规则；review 前请先阅读。
+唯一的 [M0–M7 实施计划与验收基线](docs/IMPLEMENTATION_PLAN.md)
+统一记录交付物、测试命令、当前进度和逐阶段用户确认规则；review 前请先阅读。
 M1–M4 均已通过 reviewer 技术复审，M4 按 Linux / WSL 完整验收基线通过。
 M3 已分次提交并推送，远程提交号已核验；M4 已按用户指示分次提交，交付记录见实施计划 §8.9。
-当前停止，后续扩展另行确认。
+M5 按授权先记录计划，再完成 Parallel 的设计、实现与验证，详见实施计划 §9。
+M5 定向 22 项通过；WSL 禁网完整回归 57 项通过、无跳过。用户提供的 reviewer 报告结论为通过，无阻塞项；
+独立复审结果见实施计划 §9.9；用户随后指示提交推送，交付记录见 §9.10。当前停在 M5，M6 尚未授权。
+Router、Loop 后续逐个实施，当前只规划；核心只保留四种基础原语，复合协作放未来示例和文档。
 
-当前公共导出为 `TeamMember`、`Pattern`、`as_member`、`Sequential`、`Team`。
+当前公共导出为 `TeamMember`、`Pattern`、`as_member`、`Sequential`、`Parallel`、`Team`。
 `as_member(fn)` 接受 `(task, context) -> Awaitable[result]` 的显式桥接函数；
 `await Sequential().run(members, task, context)` 逐级交接结果。
-直接调用 `run` 时，成员非空是调用前提；空序列调用不受支持，行为不保证。
+直接调用 Sequential 的 `run` 时，成员非空是调用前提；空序列调用不受支持，行为不保证。
+Parallel 的 `run` 对空序列明确抛出 `ValueError`。
 `Team(members, pattern)` 在构造时拒绝空成员；`members` 是只读的 tuple 快照，成员保持原实例引用。
 `await team.execute(task, context)` 委托 Pattern，子 Team 保留自己的 Pattern，业务结果原样返回。
+`Team(members, Parallel())` 并发调用成员，按成员顺序返回结果列表；失败/取消时取消并等待未完成成员。
 
 ## 核心抽象
 
@@ -47,7 +52,7 @@ async def run(self, members: Sequence[TeamMember], task: Any, context: Any) -> A
 
 Pattern 提供 `run`，TeamMember 提供 `execute`；满足 Pattern 协议不代表满足成员协议。
 Pattern 复用下文的数据、引用、异常与副作用约定，不是 TeamMember 的子类型。
-M1 定义两个协议；M2 实现适配与 Sequential；M3 实现可递归的 Team 容器。
+M1 定义两个协议；M2 实现适配与 Sequential；M3 实现可递归的 Team 容器；M5 增加 Parallel。
 
 ## 运行手写基线与测试
 
@@ -68,7 +73,7 @@ uv --cache-dir .uv-cache pip install --python .venv/Scripts/python.exe --no-deps
 .venv/Scripts/python.exe -m pytest
 ```
 
-M1–M3 的纯 Python 编排验证可使用 `--no-deps` 安装本地包，暂不安装 NOOA 运行时。
+M1–M3 及 M5 的纯 Python 编排验证可使用 `--no-deps` 安装本地包，暂不安装 NOOA 运行时。
 pytest 配置会加入 `src` 和项目根目录，以便验证标准库协议与手写基线。
 `pyproject.toml` 已声明 NOOA 的 Git 依赖；
 `uv.lock` 锁定此次解析的 NOOA 提交与依赖版本，完整开发环境使用 `uv sync --locked`。
@@ -147,6 +152,10 @@ rᵢ = await memberᵢ.execute(rᵢ₋₁, context)
 需要原始任务的后续成员，应由调用者显式通过 context 或业务产物提供；
 保存引用本身不会创建快照。
 
+Parallel 与 Sequential 的交接规则不同：所有成员并发收到入口的同一个 task/context，
+不把前一结果作为下一输入。正常完成时返回新建 list，按成员顺序排列，元素保持原业务对象身份；
+不按完成顺序排序，不展开子列表或过滤 None。下游须明确接收结果列表，不能把它当作其中某个成员的单个结果。
+
 ### 3. 应用 context
 
 context 是调用者创建、持有和管理的应用级对象，可以是字典、dataclass 或其他对象。
@@ -156,6 +165,9 @@ context 是调用者创建、持有和管理的应用级对象，可以是字典
 
 这里的 context 与 NOOA Agent 的 `agent.context`（提示词上下文）无关，不自动同步。
 失败或取消时，context 上已经发生的修改不会回滚。
+
+Parallel 不保护 task/context 的并发读写，**调用者负责共享对象的并发安全**。
+task 同样是共享活引用；并发不保证 CPU 并行，阻塞代码也可能阻碍失败处理与取消。
 
 ### 4. 返回值与递归调用边界
 
@@ -171,19 +183,30 @@ Pattern 决定如何产生业务结果；Team 直接返回该结果，不额外�
 
 ### 5. None
 
-`None` 是普通业务结果，逐级原样传递；最后一步返回 `None`，Team 就返回 `None`。
+`None` 是普通业务结果。Sequential 中逐级原样传递，最后一步返回 `None` 时 Team 返回 `None`；
+Parallel 将它保留为结果列表中的对应元素，不影响其他成员的调用。
 它不表示跳过、提前结束、保留上一结果或错误。
 某一步只修改 context 且希望继续传递当前输入时，应显式 `return task`。
 
 ### 6. 异常、取消与副作用
 
 成员抛出的异常直接向上传播，库不吞异常、不包装为通用错误。
-`CancelledError` 传播后不再启动后续成员。
+Sequential 在异常或 `CancelledError` 传播后不再启动后续成员。
 库不额外重试整个流程，避免重复副作用；成员或 NOOA 策略自身的重试仍按其机制运行。
 
 不回滚适用于 context、输入对象、Agent 状态及已发生的外部副作用。
 取消是协作式的，库不能强制终止阻塞、屏蔽取消或自行创建后台任务的成员。
 首版仅管理它直接等待的调用链。
+
+Parallel 仅使用固定的快速失败策略：观察到首个异常后，向尚未结束的兄弟任务发出取消请求，
+等待本次直接子任务全部结束并取走异常，再传播原先触发失败的同一个异常对象。
+多个同时异常不保证按成员顺序选取；不包装 ExceptionGroup、不返回部分结果或异常结果列表。
+其他成员取消清理时的异常不会覆盖原业务异常；外层取消保持 CancelledError，
+即使某个成员的取消清理抛错。清理过程中另一次外层取消仍可优先传播。
+
+外层被取消或某个成员自行取消时，中止本次汇集，取消并等待其他未完成成员。
+已经完成的成员不会追溯取消，成员吞掉取消后返回的值也不会把被取消的整次调用改为成功。
+快速失败指及时请求取消，不保证立即返回；异步清理或拒绝结束的成员可能延长等待，库不内置超时。
 
 ### 7. 超时
 
@@ -196,8 +219,8 @@ Pattern 决定如何产生业务结果；Team 直接返回该结果，不额外�
 Pattern 实例必须无执行状态、可复用。
 当前输入、执行进度、临时结果和异常应保存在调用局部变量中，
 不得写入 Pattern 字段或其他共享可变存储。
-同一个 `Sequential()` 可以被多个 Team 共享。
-未来固定配置与每次调用的可变执行状态应明确区分；首版 Sequential 不需要配置字段。
+同一个 `Sequential()` 或 `Parallel()` 可以被多个 Team 共享。
+未来固定配置与每次调用的可变执行状态应明确区分；Sequential 与 Parallel 不需要配置字段。
 协议不能自动证明第三方 Pattern 无状态，实现者必须遵守该约定。
 
 ### 9. 成员快照、状态共享与并发
@@ -209,12 +232,15 @@ Team 在构造时将成员序列保存为 tuple 快照，成员对象本身按�
 
 首版不承诺同一 Team 的并发调用安全。
 Pattern 无状态也不意味着成员、Agent 或共享 context 并发安全。
+同一个有状态成员在 Parallel 多个位置出现也不获得重入安全保证。
 
 ### 10. 空成员与单成员
 
 Team 构造时拒绝空成员列表，抛出 `ValueError`。
 Team 保证传给 Pattern 的成员序列非空，直接调用 Pattern 的调用者也须满足此前提。
 单成员 Sequential 返回该成员的业务结果，不复制或包装。
+单成员 Parallel 返回单元素列表，None 也保留该位置。直接调用 Parallel.run 时也对空序列抛 ValueError；
+这不改变 Sequential 对直接空序列调用不作保证的既有边界。
 
 ### 11. 递归边界
 
@@ -301,5 +327,46 @@ WSL 禁网回归 **35 passed in 59.00s，无跳过**，Windows 回归
 这些结果与上述实施运行分别保留，详见实施计划 §8.8。原生 Windows 的 NOOA 限制仍然存在，
 本次复审不代表已实现原生 Windows NOOA 支持或已授权后续扩展。
 
-目前值得保留薄组合内核并继续用真实应用验证；两步流程的手写 await 本来更短，
-这些微型示例不能证明应增加更多 Pattern 或角色库。下一步应由实际重复需求决定扩展。
+M4 当时的判断是保留薄组合内核，继续用真实应用验证；两步流程的手写 await 本来更短，
+这些微型示例本身不能证明完整应用效率提升。后续用户已明确将核心范围收敛到四种基础原语，
+按 M5 Parallel → M6 Router → M7 Loop 逐阶段推进，复合模式不进入核心。
+
+### M5 Parallel：接口、案例与验证
+
+```python
+analysis = Team(
+    [as_member(feasibility), as_member(risk), as_member(cost)],
+    Parallel(),
+)
+reports = await analysis.execute(proposal, context)
+# [FeasibilityReport, RiskReport, CostReport]，按成员顺序排列
+```
+
+[Parallel 实现](src/nooa_patterns/patterns/parallel.py) 提供
+`async run(members: Sequence[TeamMember], task: Any, context: Any) -> list[Any]`。
+所有成员共享入口引用；快速失败会取消未完成成员，等待清理后传播原异常。
+外层取消也会转交并等待清理；成员清理抛错不能把外层取消替换成业务异常。
+这不是立即中断或事务回滚保证，完整边界见上文契约。
+
+[三分析成员示例](examples/parallel_review.py) 使用具体业务类型与确定性 fake，
+保留显式创建任务、取消和等待清理的手写并发对照；普通 `aggregate` 函数将三报告合为 AnalysisBundle。
+示例只到报告聚合。递归测试用外层 Sequential 串起分析子 Team 和显式聚合成员。
+三个分析函数的输入都是 Proposal，不能直接换成 Sequential 后仍期望三报告列表；
+模式替换测试使用输入输出兼容的成员，且明确比较两种模式不同的输出形状。
+
+```powershell
+.venv/Scripts/python.exe -X utf8 examples/parallel_review.py
+.venv/Scripts/python.exe -X utf8 -m pytest -p no:cacheprovider tests/test_parallel.py tests/test_parallel_review.py -v
+```
+
+- 示例实际退出 0，手写与组合业务结果、报告位置及 context 事件多重集一致。
+- [Parallel 测试](tests/test_parallel.py) 17 项、[案例测试](tests/test_parallel_review.py) 5 项，
+  合计 **22 passed in 0.17s**。覆盖顺序、共享引用、空成员、None、失败/取消清理、嵌套及共享 Pattern。
+- Windows 全量回归 **54 passed, 1 skipped in 0.31s**；跳过的仍是上游 fcntl 限制的 NOOA 模块。
+- WSL Ubuntu 24.04 / Python 3.12.3：`unshare --net` 完整回归
+  **57 passed in 48.97s，无跳过**，包含 M4 的真实 NOOA + FakeLLMClient 测试。
+- `python -I` 隔离模式导入六个公共名称通过。NOOA 参考目录与已有快照比较，1,500 文件内容及文件集合均未改变。
+
+完整输出见 [M5_PYTEST.txt](docs/validation/M5_PYTEST.txt)，契约挑战、测试断言与实施记录见
+[实施计划 §9](docs/IMPLEMENTATION_PLAN.md)。M5 已通过 reviewer 技术复审，用户已指示提交推送，交付记录见 §9.10；
+Router、Loop 的接口归属及 Loop 耗尽标记仍是后续阶段的设计事项，本轮没有实现。

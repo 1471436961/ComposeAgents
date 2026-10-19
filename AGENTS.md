@@ -2,17 +2,19 @@
 
 开始工作前按顺序阅读：
 
-1. [实施计划与验收基线](docs/IMPLEMENTATION_PLAN.md)：当前进度、M0–M4 范围、交付物、测试与确认规则。
-2. [README](README.md)：项目定位、核心抽象和完整执行契约 v0。
+1. [实施计划与验收基线](docs/IMPLEMENTATION_PLAN.md)：唯一实施计划，统一记录 M0–M7 范围、当前授权、契约决定、验证证据及阶段确认规则。
+2. [README](README.md)：项目定位、核心抽象和完整执行契约。
 3. [协议](src/nooa_patterns/protocols.py)：实际接口与协议 docstring。
 
 ## 必须遵守
 
-- 当前完成到 M4：M3 已分次提交并推送，远程已核验；M4 已通过 Linux/WSL 基线的 reviewer 技术复审，并按用户指示分次提交，交付记录见实施计划 §8.9。禁网 WSL 完整回归为 35 项通过、无跳过；原生 Windows 的 NOOA fcntl 限制及独立运行记录见 §8.5–8.8。当前停止，后续扩展须用户确认。
+- 当前停在 M5：Parallel 已实现并通过本地验证与 reviewer 技术复审，无阻塞项；用户已指示提交推送，交付记录见实施计划 §9.10。M6 Router、M7 Loop 只规划，必须在阶段汇报后经用户确认才实现。M4 已通过复审并分次提交推送，Windows 的 NOOA fcntl 限制保留。
 - 修改里程碑状态时同步更新实施计划与 README 的当前进度；不得把实现完成、测试通过和用户确认混为一谈。
+- 实施计划统一维护在 `docs/IMPLEMENTATION_PLAN.md`；必要的专题细节可独立成文并通过链接引用，不重复维护计划或阶段状态。
+- 非必要不新增文档；是否新增由 agent 根据内容与维护需要自行判断，不以更新现有文件为优先规则。需要写文档时明确文档层级和职责，合理拆分并通过链接组织，避免内容重复或单篇过于冗长。
 - 本项目是独立 Python 包，使用 `src` 布局；NOOA 只通过公开 API 调用。
 - 禁止修改 `E:\ComposeAgents\labs-OO-Agents-main`，禁止复制或 fork NOOA 执行引擎。
-- 首版生产模式只有 Sequential；Parallel、Router、循环、辩论和角色库不在 M1–M4 范围内。
+- 核心只提供 Sequential、Parallel、Router、Loop 四种基础原语。当前仅新增 Parallel；Supervisor、GroupChat、Handoff 不作标准 Pattern，复合模式只留给未来示例/文档。Blackboard、ContractNet、Negotiation 不做，本轮不创建角色库。
 - README 与协议 docstring 都须保留完整契约。这是用户明确要求，不能仅根据去重建议删成摘要。
 - 测试不得访问真实模型。真实 NOOA Agent + 公开 FakeLLMClient 集成属于 M4。
 - 遵守平台提权机制；遇到沙箱限制不得改写测试语义来伪造通过。未执行、超时或被审批服务阻塞都不能报告为通过。
