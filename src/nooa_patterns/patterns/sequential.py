@@ -16,8 +16,8 @@ class Sequential:
     it can be reused. This does not make members or context concurrency-safe.
 
     members must be nonempty: this is a caller precondition. Empty sequences
-    are unsupported and their behavior is not guaranteed. Team will enforce
-    the precondition at construction in M3. Business compatibility remains
+    are unsupported and their behavior is not guaranteed. Team enforces
+    the precondition at construction. Business compatibility remains
     the caller's responsibility under the weakly typed TeamMember protocol.
     """
 
