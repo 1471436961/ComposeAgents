@@ -5,15 +5,21 @@ NOOA 之上的轻量协作模式与组合库，工作名暂定 `nooa-patterns`�
 NOOA 负责 Agent 执行、策略、模型调用、对象状态、原生校验和事件历史；
 本项目负责成员调用边界、显式参数桥接与普通 Python 协作逻辑。
 
-## 当前里程碑：M1
+## 当前里程碑：M2（技术复审通过）
 
 M1 提供两个手写顺序流程、`TeamMember` / `Pattern` 协议及基线测试。
-下文描述首版的完整执行契约：`as_member` 与 `Sequential` 在 M2 实现，`Team` 在 M3 实现；
-组合示例、等价测试及真实 NOOA Agent 集成在 M4 完成。当前包仅导出两个协议。
+M2 已实现 `as_member` 与 `Sequential`；`Team` 在 M3 实现，
+组合示例、等价测试及真实 NOOA Agent 集成在 M4 完成。
 
 完整的 [M0–M4 实施计划与验收基线](docs/IMPLEMENTATION_PLAN.md)
 记录了交付物、测试命令、当前进度和逐阶段用户确认规则；review 前请先阅读。
-M1 已完成并经 reviewer 复审通过，目前等待用户确认进入 M2。
+M1 与 M2 均已通过 reviewer 技术复审；M2 的评审后测试补充已验证，等待用户确认进入 M3。
+
+当前公共导出为 `TeamMember`、`Pattern`、`as_member`、`Sequential`。
+`as_member(fn)` 接受 `(task, context) -> Awaitable[result]` 的显式桥接函数；
+`await Sequential().run(members, task, context)` 逐级交接结果。
+直接调用 `run` 时，成员非空是调用前提；空序列调用不受支持，行为不保证。
+空 Team 的构造检查留在 M3。
 
 ## 核心抽象
 
@@ -38,7 +44,7 @@ async def run(self, members: Sequence[TeamMember], task: Any, context: Any) -> A
 
 Pattern 提供 `run`，TeamMember 提供 `execute`；满足 Pattern 协议不代表满足成员协议。
 Pattern 复用下文的数据、引用、异常与副作用约定，不是 TeamMember 的子类型。
-M1 只定义这两个协议；上述适配与容器行为由后续里程碑实现。
+M1 定义两个协议；M2 已实现适配与 Sequential，Team 容器由 M3 实现。
 
 ## 运行手写基线与测试
 
@@ -48,7 +54,7 @@ M1 只定义这两个协议；上述适配与容器行为由后续里程碑实�
 python examples/manual_flows.py
 ```
 
-使用 uv 创建隔离环境，从 `pyproject.toml` 安装 M1 的开发依赖并运行。
+使用 uv 创建隔离环境，从 `pyproject.toml` 安装开发依赖并运行。
 缓存保存在本项目的 `.uv-cache` 中：
 
 ```powershell
@@ -59,7 +65,7 @@ uv --cache-dir .uv-cache pip install --python .venv/Scripts/python.exe --no-deps
 .venv/Scripts/python.exe -m pytest
 ```
 
-M1 使用 `--no-deps` 验证本地包构建与导入，暂不安装 NOOA 运行时。
+M1/M2 的纯 Python 编排验证可使用 `--no-deps` 安装本地包，暂不安装 NOOA 运行时。
 pytest 配置会加入 `src` 和项目根目录，以便验证标准库协议与手写基线。
 `pyproject.toml` 已声明 NOOA 的 Git 依赖；
 后续 NOOA 集成里程碑将安装并验证该依赖。完整开发环境使用 `uv sync`。
@@ -219,3 +225,15 @@ M1 测试验证两个手写流程的业务结果、输入与产物交接、共�
 协议保持标准库实现，不依赖真实模型。
 M2 验证适配器与 Sequential；M3 验证递归 Team；
 M4 验证手写/组合等价性，以及使用公开 `FakeLLMClient` 的真实 NOOA Agent 调用。
+
+M2 定向验收命令：
+
+```powershell
+.venv/Scripts/python.exe -X utf8 -m pytest -p no:cacheprovider tests/test_adapters.py tests/test_sequential.py -v
+```
+
+评审后增加适配器异步类方法与单成员结果身份测试，最新实际结果为 M2 定向测试
+**15 passed in 0.19s**，M1+M2 全量回归 **18 passed in 0.17s**。
+初始实施与 reviewer 的 13/16 项结果作为历史记录单独保留。
+`python -I` 隔离模式下公共 API 导入与适配器/Sequential 联合调用已在首次实施和 reviewer 验证中通过。
+完整命令、断言与阶段记录见实施计划 §6.4–6.6。

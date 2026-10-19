@@ -64,18 +64,18 @@ README 将完整契约按 13 个主题组织，覆盖任务书中的 15 个要�
 | 阶段 | 内容 | 当前状态 |
 | --- | --- | --- |
 | M0 | 前置设计、契约、范围确认；本文件回填记录 | 设计已确认，见 §4 |
-| M1 | 手写基线 + 协议 + 完整文档 | 已实现并通过 reviewer 复审；独立提权测试与 reviewer 报告的测试均通过，见 §5.4–5.5；等待用户确认进入 M2 |
-| M2 | 适配器 + Sequential | 未开始，等待用户确认 |
+| M1 | 手写基线 + 协议 + 完整文档 | 已实现并通过 reviewer 复审，验证见 §5.4–5.5；用户已确认进入 M2 |
+| M2 | 适配器 + Sequential | 已通过 reviewer 技术复审，见 §6.5；评审后的测试补充也通过验证，见 §6.6；等待用户确认进入 M3 |
 | M3 | Team 容器 | 未开始 |
 | M4 | 组合示例 + 等价测试 + NOOA 集成 | 未开始 |
 
-M1 目前只导出 `TeamMember`、`Pattern`。README/docstring 对后续行为的说明是设计契约，
-不是那些功能已经实现的证据。
+M1 的导出基线为 `TeamMember`、`Pattern`；M2 已增加 `as_member` 与 `Sequential`。
+README/docstring 对后续 Team 行为的说明是设计契约，不是 Team 已经实现的证据。
 
 完整 NOOA 运行时尚未安装验证：M1 使用 `--no-deps` 验证本地包构建与导入。
 M2 的纯 Python 适配器和 Sequential 可以用 fake 验证；真实 NOOA Agent 集成属于 M4，
 届时必须完成运行时安装、依赖一致性检查及 FakeLLMClient 测试。
-可提前独立验证依赖环境，但不能把它误记为 M1 已完成事项或自动启动 M2。
+可提前独立验证依赖环境，但不能把 M4 集成误记为 M1/M2 已完成事项或自动进入下一阶段。
 
 ## 4. M0：已确认的前置设计记录
 
@@ -162,7 +162,7 @@ test_rejection_is_a_business_result_without_revision PASSED
 - README 的里程碑映射建议已修正为 M2 = 适配器 + Sequential、M3 = Team、M4 = 组合示例与集成验证。
 - 首次 Git 提交、依赖 pin 与锁文件仍是非阻塞建议，不改变 M1 的技术验收结论。
 
-复审报告建议进入 M2，但明确要求等待用户确认；本次只更新文档记录，不表示 M2 已获授权。
+该复审报告本身不构成 M2 授权；用户随后于 2026-10-19 明确指示“开始M2”，当前状态见 §3。
 
 ## 6. M2：适配器 + Sequential
 
@@ -207,6 +207,86 @@ Team 构造期拒绝空成员的职责在 M3 验证。
 
 汇报适配器和 Sequential 的最终内容、实际测试输出、发现的契约歧义；然后停止。
 M2 不实现 Team，不要求真实 NOOA Agent 集成，不开始 M3。
+
+### 6.4 M2 首次实施与验证记录
+
+授权来源：用户于 2026-10-19 明确指示“开始M2”。本节为首次实施的历史记录；
+后续 reviewer 结论和测试补充分别见 §6.5、§6.6，用户尚未授权 M3。
+
+已交付：
+
+- `src/nooa_patterns/adapters.py`：私有普通类保存原 callable 引用，真实 `async execute` 转交调用；
+  `as_member` 不进行签名推断、业务转换、对象复制或自动 context 同步。
+- `src/nooa_patterns/patterns/sequential.py`：仅用局部变量和顺序 `await` 交接结果，无执行状态字段。
+- `src/nooa_patterns/patterns/__init__.py` 和包根导出：公开 `Sequential`、`as_member`，保留两个协议。
+- `tests/test_adapters.py`：6 个行为测试。
+- `tests/test_sequential.py`：7 个测试用例，其中包括 3 种中间/最终 `None` 组合。
+- README、AGENTS 与本计划同步更新到 M2 完成并等待下一阶段确认。
+
+实际执行结果：
+
+| 验证 | 实际命令 / 内容 | 结果 |
+| --- | --- | --- |
+| 适配器增量验证 | `.venv/Scripts/python.exe -X utf8 -m pytest -p no:cacheprovider tests/test_adapters.py -v` | `6 passed in 0.13s` |
+| M2 定向验收 | `.venv/Scripts/python.exe -X utf8 -m pytest -p no:cacheprovider tests/test_adapters.py tests/test_sequential.py -v` | `13 passed in 0.19s` |
+| M1+M2 回归 | `.venv/Scripts/python.exe -X utf8 -m pytest -p no:cacheprovider -v` | `16 passed in 0.16s` |
+| 隔离公共 API 验证 | `python -I -X utf8` 导入两个协议、`as_member`、`Sequential`；对 3 依次加 1、乘 2，复用同一应用 context | 返回 `8`，context 为 `["add", "double"]` |
+
+运行环境为 Windows / Python 3.12.14 / pytest 9.1.1。测试仅使用普通 fake，无新增依赖、网络或模型调用。
+
+关键断言：
+
+- task/context/业务结果的身份保持；绑定方法沿用同一个原实例及其状态。
+- 显式桥接异构签名，不自动改写实例自身的 context。
+- 用事件暂停首成员，确认其完成前第二成员未启动；首成员产物原样成为下一输入。
+- 中间 `None` 仍会调用下一成员，最终 `None` 原样返回。
+- 异常对象保持身份，后续成员不运行；输入、context 和 fake 实例的失败前修改保留，未重试。
+- 对运行中的调用执行真实 `Task.cancel()`，取消传播且后续步骤不启动，已有修改保留。
+- 同一个 Sequential 的两次 `run` 交错执行，分别使用独立成员/context，结果和输入无串扰。
+  这不是 M3 的跨 Team 测试，也不扩大为同一 Team 或成员并发安全承诺。
+- 测试中的 5 秒超时只用于防止测试卡住，未给生产 Pattern 增加超时机制。
+
+未发现新增的未决契约歧义。非空成员仍按已确认的直接调用前提处理，
+M3 将由 Team 构造器拒绝空成员；本次未定义空序列直接调用 `Sequential.run` 的保证行为。
+首次实施完成时停在 M2 等待复审；后续结论见 §6.5–6.6。
+Team、组合应用与真实 NOOA 集成均未实现。
+
+### 6.5 Reviewer M2 技术复审结论
+
+来源：用户提供的《M2 Review 报告》。以下是 reviewer 在新增两项补充测试之前的验证记录，
+与 §6.4 的实施运行和 §6.6 的后续运行分开保存。
+
+- **结论：通过，无 M2 阻塞问题，建议等待用户确认后进入 M3。**
+- 适配器符合真实异步类方法、原 callable 与实例引用保持、显式桥接、无自动 context 同步的要求。
+- Sequential 符合逐级交接、`None`、异常与取消传播、无重试/回滚、无执行状态和交错复用约定。
+- reviewer 报告的实际结果：适配器 `6 passed in 0.11s`、Sequential `7 passed in 0.12s`、
+  M2 定向 `13 passed in 0.20s`、全量回归 `16 passed in 0.20s`。
+- reviewer 报告：隔离模式公共导入和适配器/Sequential 联合调用均通过。
+- 单成员独立测试、适配器异步类方法结构测试、空序列文档与提交建议均为非阻塞项。
+- 完整 NOOA 运行时及 FakeLLMClient 集成继续归 M4；Team 归 M3，不属于 M2 缺陷。
+- 评审基于 M2 工作树；M1 有提交基线，M2 当时尚未提交。
+
+该报告不表示用户已经授权 M3。
+
+### 6.6 M2 评审后的测试补充
+
+在 M2 范围内采纳了以下非阻塞建议：
+
+- 新增适配器结构测试：检查公开 `execute` 是类上可发现的函数且为协程函数，
+  防止退化为实例字段赋值。这是明确交付形状的测试，不对业务签名或协议做生产运行时校验。
+- 新增独立单成员测试：输入对象与业务产物不同，结果必须是成员返回的同一对象，成员恰好调用一次。
+- Sequential docstring 与 README 明确空序列调用不受支持、行为不保证；保持非空调用前提，
+  没有新增空序列的运行时处理规则。空 Team 构造期检查仍在 M3。
+
+本轮实际执行结果（Windows / Python 3.12.14 / pytest 9.1.1）：
+
+| 验证 | 命令 | 结果 |
+| --- | --- | --- |
+| M2 定向 | `.venv/Scripts/python.exe -X utf8 -m pytest -p no:cacheprovider tests/test_adapters.py tests/test_sequential.py -v` | `15 passed in 0.19s` |
+| M1+M2 全量 | `.venv/Scripts/python.exe -X utf8 -m pytest -p no:cacheprovider -v` | `18 passed in 0.17s` |
+
+当前测试数量为适配器 7 项、Sequential 8 项、M1 基线 3 项。
+没有新增依赖、真实模型或网络调用。M2 保持停止状态，等待用户确认进入 M3。
 
 ## 7. M3：Team 容器
 
