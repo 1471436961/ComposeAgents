@@ -1,5 +1,6 @@
-"""Public composition protocols for the M1 prototype."""
+"""Public protocols and callable adaptation."""
 
+from .adapters import as_member
 from .protocols import Pattern, TeamMember
 
-__all__ = ["Pattern", "TeamMember"]
+__all__ = ["Pattern", "TeamMember", "as_member"]
