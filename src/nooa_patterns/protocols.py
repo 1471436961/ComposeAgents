@@ -18,20 +18,31 @@ class TeamMember(Protocol):
     原始指入口收到的对象，不表示不可变快照。库不序列化、复制或转换输入。
     成员可以修改可变输入；返回值、输入与 context 内对象可以互为别名。
     后续成员需要原始任务时，由调用者显式提供；保存引用不会创建快照。
+    Parallel 中所有成员并发接收入口的同一个 task 和 context，而非前一成员结果。
+    按成员顺序返回新 list；元素是原业务结果，保留 None、嵌套列表和对象身份，不展开。
+    该列表本身是此次 Team 调用的聚合业务结果，下游须能接收该形状。
 
     context 是调用者创建、持有和管理的任意应用级对象。
     所有成员收到同一个引用，修改彼此可见。库不复制、不持久化，
     不注入 last_result、history 或原始任务；成员和显式适配函数可以主动修改它。
     它与 NOOA agent.context（提示词上下文）无关，不自动同步。
+    Parallel 不保护 task/context 的并发读写，调用者负责并发安全；同一成员的重入也由调用者负责。
 
     叶子与 Team 都返回自身此次调用的业务结果，处于同一成员调用边界，
     不要求相同 Python 类型、数据形状或任务粒度。Pattern 决定业务结果如何产生，
     Team 直接返回该结果，不额外包装统一执行状态对象。
     子 Team 的输出须匹配外层后续成员的输入；统一签名不保证业务兼容。
-    None 是普通结果，逐级原样传递；不表示跳过、提前结束或保留上一结果。
+    None 是普通结果：Sequential 逐级原样传递，Parallel 保留结果列表中的对应元素。
+    它不表示跳过、提前结束或保留上一结果。
     只修改 context 且希望继续传递输入的成员应显式 return task。
 
-    异常与 CancelledError 直接传播，不启动后续成员，不吞掉或包装异常。
+    异常与 CancelledError 直接传播，不吞掉或包装异常；Sequential 不启动后续成员。
+    Parallel 在首个失败被观察到后取消未完成兄弟任务，等待全部直接子任务结束后传播原异常。
+    同时失败不保证按成员顺序选择异常；取消清理异常被取走但不覆盖原业务异常。
+    外层或单个成员取消会中止 Parallel 汇集，取消其他未完成任务并等待结束。
+    外层取消保持 CancelledError，即使成员的取消清理抛错；成员吞掉取消也不把整次调用改成成功。
+    已经完成的成员不会被追溯取消；只管理等待链，不接管成员自行创建的后台任务。
+    快速失败指及时请求取消，不承诺立即返回；取消清理可能等待，额外的外层取消仍可传播。
     库不重试整个流程；成员或 NOOA 策略自身的重试仍按原机制执行。
     失败或取消不回滚 context、输入、Agent 状态及已经发生的外部副作用。
     库不能强制中断阻塞或屏蔽取消的成员，仅管理直接等待的调用链。
@@ -40,7 +51,7 @@ class TeamMember(Protocol):
 
     Pattern 必须无执行状态并可跨 Team 复用；当前输入、进度、临时结果与异常
     只能属于此次调用，不能保存在 Pattern 字段或其他共享可变存储中。
-    固定配置与可变执行状态应区分；Sequential 不需要配置字段。
+    固定配置与可变执行状态应区分；Sequential、Parallel 不需要配置字段。
     本协议不能自动证明第三方 Pattern 遵守无状态约定。
 
     Team 构造时取成员序列的 tuple 快照，保留成员引用，不复制、不重置。
@@ -48,7 +59,8 @@ class TeamMember(Protocol):
     多个 Team 共享成员时仍是同一个有状态实例；重复执行不会自动创建干净会话。
     首版不承诺同一 Team 并发调用安全；Pattern 无状态不保证成员或 context 并发安全。
     空 Team 在构造时抛出 ValueError；Pattern 的成员序列前提为非空。
-    单成员 Sequential 原样返回该成员的结果。
+    单成员 Sequential 原样返回该成员的结果；单成员 Parallel 返回单元素列表。
+    直接 Parallel.run 也对空成员抛 ValueError，不改变 Sequential 对直接空序列不作保证的边界。
 
     允许嵌套与成员复用；子 Team 保留自己的 Pattern，不扁平化。
     不支持直接或间接自调用造成无限递归，首版没有完整图校验器。
@@ -71,9 +83,9 @@ class Pattern(Protocol):
     本协议提供 run，不是 TeamMember 的子类型；仅实现 run 不满足成员的 execute 协议。
     Team 的 execute 委托 run 并直接返回业务结果，Pattern 自身不因此成为 Team 成员。
 
-    Pattern 必须无执行状态并可复用。同一 Sequential 实例可被多个 Team 共享。
+    Pattern 必须无执行状态并可复用。同一 Sequential 或 Parallel 实例可被多个 Team 共享。
     当前输入、进度、临时结果、异常不得保存到实例字段或其他共享可变存储。
-    未来固定配置应与执行状态区分；首版 Sequential 没有配置字段。
+    未来固定配置应与执行状态区分；Sequential、Parallel 没有配置字段。
     无状态是实现者的约定，Protocol 不会自动验证它。
 
     members 是非空成员序列，成员按引用调用；Team 在构造时固定 tuple 快照。
@@ -81,6 +93,8 @@ class Pattern(Protocol):
     返回此次协作的业务结果，Team 原样返回它；None 也是普通业务结果。
     异常和取消直接传播，不重试整个流程、不回滚副作用，不内置超时或管理资源。
     子 Team 保留自己的 Pattern；不支持无限递归，也不承诺同一 Team 并发安全。
+    Parallel 共享入口 task/context，按成员顺序返回业务结果 list；失败或取消时取消并等待
+    未完成兄弟任务，传播原失败或 CancelledError。并发修改与成员重入安全属于调用者。
 
     Pattern 控制成员之间的协作，NOOA Strategy 控制单个生成方法的执行。
     """
