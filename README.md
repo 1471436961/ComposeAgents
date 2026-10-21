@@ -4,7 +4,8 @@ NOOA 之上的递归多智能体组合库。Team 对外接受任务与上下文�
 再由确定的 Python 算法协作。NOOA 提供对象描述、生成方法、模型调用、CodeAct、叶子类型校验及历史。
 
 当前核心已按 [Team 重构设计](docs/design/team-refactor.md)完成并交付，主体重构通过技术复审。
-旧示例已移除，新的应用场景正在讨论，尚未实现。
+已选择相对通用的 GPU 推理优化研发团队方向，首个业务输入为 [EdgeSeg-EfficientViT 项目需求](docs/requirements/edgeseg-efficientvit.md)。
+当前仅完成需求文档；团队与应用尚未实现，examples 保持为空。
 [唯一实施计划](docs/IMPLEMENTATION_PLAN.md)记录当前授权、实际验证及已交付基线。
 旧 Pattern Protocol、四个 Pattern 类和 Members 已删除。本库不提供新的 Agent 执行引擎或第三方 Pattern 接口。
 
@@ -145,7 +146,7 @@ CancelledError、KeyboardInterrupt、SystemExit 不包装；外层 asyncio.timeo
 
 ## 当前验证与示例状态
 
-`examples/` 当前为空。新的应用场景需先讨论确认，再编写实现；不沿用原有技术评审或复合模式演示。
+`examples/` 当前为空。领域团队与应用的实现需要后续授权，不沿用原有技术评审或复合模式演示。
 核心控制测试使用确定性分配；真实 standalone 分配与真实 Agent 调用由 FakeLLMClient 集成测试验证，
 不访问真实模型。应用层组合不进入库的公开接口。
 
