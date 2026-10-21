@@ -1,131 +1,91 @@
-# 实施计划与验收基线
+# 实施计划与当前基线
 
-这是唯一实施计划。当前 API 与完整契约见 [README](../README.md)，技术设计见 [Team 重构方案](design/team-refactor.md)。
-本次按用户要求合并重复说明和历史日志；旧阶段的完整记录仍可从下表对应 Git 提交恢复。
+这是唯一实施计划。当前接口与完整契约见 [README](../README.md)，架构依据见 [Team 重构设计](design/team-refactor.md)。
+本文件从已完成重构的现实出发维护当前任务；此前的阶段安排不再作为路线图，历史内容仅通过 Git 查询。
 
-## 1. 当前范围与授权
+## 1. 当前任务与授权
 
-2026-10-21 用户授权按重构设计完成代码迁移、删除不必要文档和代码，并在触及五小时限额时等待恢复后继续。
-授权覆盖本次完整迁移、清理及验证，不需要在已授权的内部步骤间反复确认。
-用户随后提供“技术复审通过、无阻塞项”的报告，并授权按确认的非阻塞建议补充原生分配测试及成员映射复用说明。
-用户又明确要求分多次提交并推送至 GitHub origin/main；本次交付授权不自动延伸到台阶二。
-真实 LLM 应用、角色库和版本发布不在本次范围。测试只用确定性 fake 与 NOOA 公开 FakeLLMClient。
+2026-10-21 用户要求清理过时文档，删除 examples 下的全部现有文件和子目录，然后重新讨论合适的应用场景。
+用户明确纠正：场景确认前不编写新示例，不沿用原技术评审场景。
 
-`E:\ComposeAgents\labs-OO-Agents-main` 是只读参考，禁止修改；项目位于 `E:\ComposeAgents\nooa-patterns`。
-使用 NOOA 公开 API，不复制其执行引擎。核心只有四值 PatternKind，由普通 Team 执行。
-不添加第三方 Pattern、复合类、通用上下文引擎或生产 allocator 注入钩子。
-README 和 TeamMember docstring 均保留完整契约，修改时同步；不得把通过测试误写成用户已完成技术复审。
+本轮范围：
 
-## 2. 文档与清理规则
+- 清空 examples，包括原复合示例目录和讨论前过早生成的三个新文件。
+- 删除仅依赖这些示例的测试，清理文档中的失效引用和旧路线表述。
+- 保留核心实现、控制流与原生 NOOA 集成测试，并运行回归检查。
+- 只讨论新的应用场景；尚未授权应用实现、真实模型调用、模型凭据、预算、版本发布或推送。
 
-- README 是使用入口与当前契约；设计文档说明架构和语义；本文件记录授权、顺序、证据和状态。
-- 非必要不新建文档，专题通过链接组织；不再为每次测试新增日志或独立计划。
-- 历史 M4–M7 的重复 pytest 文本从工作树移除，历史结果和恢复提交见 §3；不把旧结果当新版本证据。
-- 删除旧 Pattern/Members、对应的纯旧接口测试和逐阶段重复评审示例；保留或迁移有价值的取消、引用、反馈断言。
-- 三个递进评审示例合并成 examples/technical_review.py；两个复合示例仍在 examples/composites，仅供复制修改。
+用户随后要求先提交本次清理，再搜索公开多智能体评测与论文以重新讨论应用场景。
+该指令授权本轮本地提交，尚未授权推送；搜索和讨论不等于授权实现新场景。
 
-## 3. 历史交付索引
+`E:\ComposeAgents\nooa-patterns` 是项目及 Git 仓库；`E:\ComposeAgents\labs-OO-Agents-main` 为只读 NOOA 参考源码，禁止修改。
 
-以下均为旧 API 的历史验证，完整细节保留在 Git，不代表重构实现已通过。
+## 2. 重构后的实际能力与边界
 
-| 阶段 | 交付内容 | 历史完整结果 | 交付提交 |
-| --- | --- | --- | --- |
-| M0 / M1 | 设计、弱类型协议、两条手写基线 | 3 passed | 803c4d2、b207b23 |
-| M2 | 适配器、Sequential 与补充测试 | 18 passed | 17b86d9、f4ae217、08a3da9 |
-| M3 | 递归 Team 与快照 | 29 passed | 74ec24e、59b36c4 |
-| M4 | 等价对照、真实 Agent + FakeLLMClient | WSL 35 passed | d4d1b76、59d2c89、536fbcb |
-| M5 | Parallel 及快速失败 | WSL 57 passed | 285264e、52be0d4、2cc65b5 |
-| M6 | Members、Router 与技术评审 | WSL 95 passed | 626634d、383480f、180643b |
-| M7 | Loop 及有界反馈 | WSL 136 passed | e23fe23、c639aba、daf14b9 |
-| 台阶一 | EvaluatorOptimizer、Debate fake 示例 | WSL 157 passed | c50c07c、c1b368e、d577b1b |
+- Team 是普通 Python 类，固定持有只读命名成员和 PatternKind，递归成员可为叶子或子 Team。
+- 四种固定算法是 SEQUENTIAL、PARALLEL、ROUTER、LOOP，由 Team 执行。
+- 每次 execute 先通过 NOOA 公开描述和 standalone CodeAct 分配一次；成员使用局部 materials/upstream/feedback。
+- 核心保留弱类型边界、分配错误分类、引用传递、异常与取消清理契约；不新增 Pattern 扩展点、规划器钩子或上下文引擎。
+- 信息交接已通过 FakeLLMClient 原生调用验证；真实模型的自主分配质量、成本和开发体验仍未被证明。
 
-重构开始时 HEAD 为 d577b1bf5d50c99047808be19d387e8aa94b30c4；原始日志可例如用
-`git show d577b1b:docs/validation/M7_PYTEST.txt` 查看。台阶二真实应用与台阶三判断尚未实施。
+README 与 TeamMember docstring 均保留完整契约，修改时同步。测试通过、技术复审和用户验收是不同状态。
 
-## 16. Team 重构设计与迁移准备
-
-2026-10-20 创建设计文档；2026-10-21 明确两层分配、取消描述构造参数、保留单成员、分配错误分类与直接预览，
-随后用户明确授权代码重构。具体契约见[设计方案](design/team-refactor.md)，字段和验证目标不在本文件重复维护。
-
-当前状态：主体重构已通过技术复审；确认的非阻塞补充已完成并本地验证。
-代码与测试已按授权分次提交并推送 origin/main；本次文档与历史清理作为独立提交交付，不自动进入台阶二。
-
-实施顺序与当前状态：
-
-| 顺序 | 工作 | 状态 |
-| --- | --- | --- |
-| 1 | 固定枚举、命名只读成员、Team 四算法、局部 context、AllocationError | 已迁移 |
-| 2 | 普通 allocate 自动描述、原生 standalone CodeAct 分配、延迟导入 | 已迁移并经 FakeLLMClient 验证 |
-| 3 | 适配器原 callable 描述、原生叶子校验与实际模型输入筛选 | 已验证 |
-| 4 | 手写/组合业务对照、两复合示例、四模式评审合并 | pytest 通过，Windows/WSL 各 8 个脚本或模块入口通过 |
-| 5 | 删除旧接口/冗余日志、重写当前契约、链接与差异检查 | 已完成，旧模块已不存在，语法/链接/差异检查通过 |
-
-### 本次实际验证
-
-运行日：2026-10-21。下列是本次工具输出，不使用历史计数代替。
-
-| 范围 | 命令 | 实际结果 |
-| --- | --- | --- |
-| 初始纯 Python 定向 | `.venv/Scripts/python.exe -X utf8 -m pytest -p no:cacheprovider tests/test_execution.py tests/test_allocation.py tests/test_adapters.py -q` | 74 passed in 0.18s |
-| 初始真实 NOOA 定向 | WSL 禁网运行 test_nooa_allocation.py、test_nooa_adapter.py | 6 passed in 48.73s |
-| 重构初版 Windows 全量 | `.venv/Scripts/python.exe -X utf8 -m pytest -p no:cacheprovider -q` | 130 passed, 2 skipped in 0.65s |
-| 重构初版 WSL 全量 | `LITELLM_LOCAL_MODEL_COST_MAP=True unshare --net .uv-cache/wsl-venv/bin/python -X utf8 -m pytest -p no:cacheprovider -q` | 138 passed in 25.60s，无 skip |
-| 隔离导入 | `.venv/Scripts/python.exe -I -B -X utf8 -` 导入五个公共名称，并检查旧模块的 import spec | 五名称导入成功；patterns、members 已不存在 |
-| 静态检查 | AST 解析 src/examples/tests；Markdown 本地链接检查；`git diff --check` | 22 个 Python 文件、4 个 Markdown 文件、29 处链接通过，差异无空白错误 |
-
-示例验证在 Windows 和 WSL 禁网环境分别完成，均为 8 个入口退出 0：
-manual_flows、composed_flows、technical_review、EvaluatorOptimizer、Debate 五个脚本，
-以及后三者的 `python -m examples...` 模块入口。运行时包含手写/组合结果和反馈断言。
-文档缩写为 EvaluatorOptimizer 的实际模块名是 `examples.composites.evaluator_optimizer`。
-
-Windows 的两个 skip 是原生 NOOA 集成模块，原因是锁定版本上游无条件导入 Unix fcntl。
-真实分配、模型等待取消及叶子提示词筛选在 WSL 完整运行，不写 shim 或修改 NOOA。
-Windows 沙箱内初次运行因已知 asyncio 阻塞被终止，未计为通过；表中 Windows 通过结果来自提权运行。
-
-迁移时有两项嵌套取消测试最初超时：测试错误要求父 Team 在子 Team 尚未完成清理时就观察到子失败。
-按原等待链契约修正观察顺序，仍断言内外层取消、清理完成和原异常身份；修正后已纳入上述全量通过结果。
-
-验收重点已覆盖：不同局部任务、直接前驱/None、命名结果、嵌套 Loop 反馈、分配异常归属与 cause、
-各层取消清理、原生参数/输出校验、实际叶子请求包含所选材料且排除根无关材料。
-这证明 fake 条件下的控制和信息边界，不证明真实模型分配质量或应用效率。
-
-### 技术复审后的非阻塞补充
-
-2026-10-21 按用户确认补充以下内容，仅修改既有测试、README 和本计划，不改变生产接口、依赖或 NOOA 源码：
-
-- 父 Team → 子 Team → 真实 EvidenceAgent 的原生调用链。两层均使用真实 allocate，FakeLLMClient 提供脚本响应；
-  检查父层能看到子 Team 业务描述、子层只描述直接叶子、逐层材料引用保持，以及子层/叶子请求排除根上下文无关标记。
-- Router/Loop 参数化原生用例。在 CodeAct 内检查实际 pattern_description 中的模式及 selector/until 文档、轮数；
-  检查 Router 仅执行选中成员，Loop 完成两轮但只消费一次脚本化分配响应，并保留反馈身份。
-- README 说明通过 `dict(team.members)` 复用成员映射；仍接受 dict，不扩大为 Mapping，也不新增文件。
-
-本轮实际运行：
-
-| 范围 | 命令 | 实际结果 |
-| --- | --- | --- |
-| WSL 原生分配定向 | `LITELLM_LOCAL_MODEL_COST_MAP=True unshare --net .uv-cache/wsl-venv/bin/python -B -X utf8 -m pytest -p no:cacheprovider tests/test_nooa_allocation.py -v` | 8 passed in 29.02s |
-| Windows 全量 | `.venv/Scripts/python.exe -B -X utf8 -m pytest -p no:cacheprovider -q` | 130 passed, 2 skipped in 0.64s |
-| WSL 禁网全量 | `LITELLM_LOCAL_MODEL_COST_MAP=True unshare --net .uv-cache/wsl-venv/bin/python -B -X utf8 -m pytest -p no:cacheprovider -q` | 141 passed in 25.37s，无 skip |
-
-WSL 比初版增加 3 项：嵌套 1 项、模式参数化 2 项；Windows 两个 skip 仍为上游 fcntl 限制。
-这些结果验证原生调用链和信息交接，不代表真实模型自主分配质量，也不把本地验证等同于补充内容已通过独立复审。
-
-### 本次提交交付
-
-2026-10-21 用户明确要求分多次提交并推送，按以下边界交付：
+## 3. 已交付基线
 
 | 提交 | 内容 | 交付 |
 | --- | --- | --- |
-| 0fd2704 | Team 破坏性 API 迁移及必要的示例、控制流测试迁移 | 已推送 origin/main |
-| da99710 | 原生分配、嵌套材料边界、Router/Loop 与取消集成验证 | 已推送 origin/main |
-| 本文所在的文档提交 | 当前契约、设计与授权记录，删除重复历史日志 | 独立提交，随本次交付推送 |
+| 0fd2704 | Team 执行与信息分配重构、必要调用方迁移 | 已推送 origin/main |
+| da99710 | 原生分配、嵌套输入筛选、模式描述与取消验证 | 已推送 origin/main |
+| 7861ccd | 重构契约、设计、授权及文档整理 | 已推送 origin/main |
 
-破坏性接口与其必要调用方同次迁移，避免把旧测试留在不兼容的中间版本；原生集成证据和文档分别提交。
-测试代码未在拆分时改写，沿用上方 141 项 WSL 全量通过的同一版本。
+主体重构技术复审通过；其后确认的补充测试已完成本地验证。
+清理前的基线为 Windows 130 passed、2 个 NOOA 模块平台跳过，WSL 禁网 141 passed 无跳过。
+原生分配模块 8 项覆盖父子独立分配、材料活引用、叶子实际模型输入、Router/Loop 和取消。
+这些是清理前的历史结果，不代表当前测试集合；完整旧文件可用 `git show 7861ccd:路径` 查询。
 
-### 运行环境和汇报
+## 4. 本轮清理与验证
 
-- Windows Python 3.12、项目 .venv；WSL Ubuntu 24.04、项目 .uv-cache/wsl-venv，完整测试使用禁网命名空间。
-- uv.lock 与 NOOA 依赖版本保持原锁；网络/权限问题不通过改写测试语义绕过。
-- 本次未运行真实模型、未访问凭据、未修改 NOOA 参考源码或发布版本；代码与测试已按后续授权推送。
-- 主体重构已通过技术复审；补充内容已本地验证，用户已授权提交交付，不据此宣称补充内容已通过独立复审。本次交付后停止，不自动进入台阶二。
+当前状态：示例已清空，专属测试与文档引用已清理，回归验证通过。新场景未确定，未创建新示例。
+
+| 内容 | 状态 |
+| --- | --- |
+| examples 全部文件及子目录 | 已删除，目录留空 |
+| 旧示例专属测试 | 已删除 4 个文件及其 37 项专属用例 |
+| AGENTS、README、设计与本计划 | 已取消旧路线，删除失效示例引用 |
+| 核心实现与原生集成断言 | 保留，不修改生产接口 |
+| 当前全量回归与链接检查 | 已通过，实际输出见下方 |
+
+运行方式：
+
+```powershell
+.venv/Scripts/python.exe -B -X utf8 -m pytest -p no:cacheprovider -q
+```
+
+WSL 完整验收：
+
+```bash
+LITELLM_LOCAL_MODEL_COST_MAP=True unshare --net .uv-cache/wsl-venv/bin/python -B -X utf8 -m pytest -p no:cacheprovider -q
+```
+
+原生 Windows 仍受上游 NOOA 无条件导入 Unix fcntl 的限制，两个原生集成模块会明确跳过。
+完整原生验收必须在 Linux/WSL 无跳过运行；不写 shim、不修改 NOOA、不把未执行或超时报告为通过。
+不为本轮新增验证日志或另一份计划，实际输出统一在本节记录。
+
+2026-10-21 本次实际结果：
+
+| 检查 | 输出 |
+| --- | --- |
+| Windows 上述命令，按已知 asyncio 沙箱限制提权运行 | 93 passed, 2 skipped in 0.36s |
+| WSL 上述命令，禁网命名空间 | 104 passed in 30.23s，无 skip |
+| 语法与本地文档链接 | 13 个 Python 文件、4 个 Markdown 文件、25 处链接通过 |
+| 清理与差异检查 | examples 无文件或子目录，无示例导入残留，git diff --check 通过 |
+
+相较清理前减少的 37 项均为已删除示例的专属测试；核心和原生分配测试未删改。
+本轮未修改 src、依赖或只读 NOOA 源码，未运行真实模型。清理按后续授权纳入本提交，尚未推送。
+
+## 5. 下一项工作的讨论边界
+
+下一项工作由重构后的 Team 能力和真实需求共同决定，当前只讨论场景。
+场景应有自然的职责分工、不同的信息需求、可观察的业务产物和可控的输入规模；不为展示四种算法强行制造流程。
+需先明确用户输入、最终交付物、成员职责、信息边界与最小范围，再决定结构和实现。
+任何候选场景都不等于已确定路线；确认前不生成应用代码、示例或新增设计文档。

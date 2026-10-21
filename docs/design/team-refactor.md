@@ -4,7 +4,7 @@
 
 本文是 Team 重构的设计与实现依据。用户已于 2026-10-21 授权按本方案迁移代码并清理冗余文件；
 源码已迁移，当前验证与复审状态统一在
-[唯一实施计划](../IMPLEMENTATION_PLAN.md#16-team-重构设计与迁移准备)维护；本文不另建里程碑。
+[唯一实施计划](../IMPLEMENTATION_PLAN.md)维护；本文不另建里程碑。
 
 方向决定来自设计讨论，具体落点由本次按方案实施授权采用。本文 Python 展示接口和执行结构，
 完整行为以源码、README 和协议 docstring 为准；测试通过不代表用户已完成技术复审。
@@ -382,18 +382,12 @@ src/nooa_patterns/
 Team 使用清晰私有方法组织，无需先按行数增加 mixin 或继承层；NOOA 桥接单独放置。
 不在包导入时创建客户端或发起模型调用；纯 Python 控制测试可替换分配方法，不需要真实模型。
 
-迁移保留业务函数，显式更新输入适配和手写对照：
+当前维护边界：
 
-- 递进的 `parallel_review`、`router_review`、`loop_review` 合并为
-  [technical_review.py](../../examples/technical_review.py)，按名聚合并验证缺失名称/错误业务类型，使用新的上游和反馈语义。
-  selector/until 不依赖执行器隐式修改根 context。
-- EvaluatorOptimizer 与 Debate 继续只是示例，按新数据流重写对照，保留反馈实际影响下一次业务处理的断言。
-- M6 的“替换 selector”案例使用两支新 Team 复用业务实现，改名为业务能力跨 Team 复用验证；
-  不测试运行时替换 pattern，也不把共享有状态实例宣传为必要条件。
-- 旧 `test_members` 的快照/命名行为迁移到 `test_execution.py`；算法测试优先通过 `Team.execute` 验证，
-  私有方法测试只补充必要边界，不只检查实现形状。
-- README 与 TeamMember docstring 同时迁移完整契约；历史里程碑在实施计划保留索引，重复验证日志从工作树删除，
-  完整内容可从历史 Git 提交恢复，不能改写成新 API 的验证证据。
+- 原有示例及其专属测试已删除，examples 保持为空；新应用场景确认后另行设计，不继承旧场景或实施顺序。
+- 算法测试通过 `Team.execute` 验证；局部上下文、反馈与取消等核心断言继续保留在 tests 中。
+- 业务能力可由新 Team 复用；不测试运行时替换 pattern，也不把共享有状态实例宣传为必要条件。
+- README 与 TeamMember docstring 同时维护完整契约。旧交付可从 Git 恢复，历史验证不作为当前结果。
 
 ## 9. 验证要求
 
@@ -413,7 +407,7 @@ Team 使用清晰私有方法组织，无需先按行数增加 mixin 或继承�
 | Router | selector 一次、一个成员执行；入口参数保持；未命中含可用名称；子 Team 保留自己的模式 |
 | Loop | 整轮执行后判断；严格 bool；末轮 True/耗尽；轮内状态重置；上一轮反馈身份；不重复本 Team 分配 |
 | 递归与复用 | 子 Team 获得父分配及实际上游结果；子调用各自分配；无自动根材料继承；跨执行状态不串扰 |
-| 对照与模型输入 | 手写/组合使用独立成员和 context、相同业务实现；观察叶子真实 FakeLLMClient 请求中的相关材料 |
+| 模型输入 | 观察叶子真实 FakeLLMClient 请求中的相关材料，并确认未选择的根材料没有意外进入子层和叶子 |
 
 纯控制流测试使用确定性 fake 分配，可用测试子类覆盖 `allocate` 或使用 pytest 替换机制；
 两者均属于测试基础设施，不增加 allocator 构造参数、策略注册器或第二个 planner 钩子。
@@ -421,7 +415,7 @@ Team 使用清晰私有方法组织，无需先按行数增加 mixin 或继承�
 fake 覆盖用于控制流测试，分配校验与异常测试仍覆盖真实普通 `allocate` 的收集/生成/校验边界；
 NOOA 集成测试使用 FakeLLMClient，并拒绝真实模型/网络调用，不能只替换整个方法来声称原生生成路径已通过。
 原生 Windows 的 NOOA `fcntl` 限制沿用已记录的平台事实；完整原生集成验收在 Linux/WSL 无跳过运行。
-现有 157 项通过是旧实现的历史证据，新接口迁移后的数量与结果必须重新实际报告。
+测试集合变化后重新报告实际数量与结果，不沿用历史计数。
 
 ## 10. NOOA 源码依据
 
@@ -437,4 +431,4 @@ NOOA 集成测试使用 FakeLLMClient，并拒绝真实模型/网络调用，不
 | Context / ScopedContext 与跨 Agent 边界 | [models.py](../../../labs-OO-Agents-main/src/nooa/context_blocks/models.py)、[scoped.py](../../../labs-OO-Agents-main/src/nooa/context_blocks/scoped.py)、[method_wrapper.py](../../../labs-OO-Agents-main/src/nooa/runtime/method_wrapper.py) |
 | CodeAct 参数访问与 Predict 返回要求 | [codeact.py](../../../labs-OO-Agents-main/src/nooa/strategies/codeact.py)、[predict.py](../../../labs-OO-Agents-main/src/nooa/strategies/predict.py) |
 
-这些来源支持复用机制的判断，不替代对锁定依赖版本的集成验证。实施顺序及后续授权见[唯一实施计划](../IMPLEMENTATION_PLAN.md#16-team-重构设计与迁移准备)。
+这些来源支持复用机制的判断，不替代对锁定依赖版本的集成验证。当前工作与授权见[唯一实施计划](../IMPLEMENTATION_PLAN.md)。

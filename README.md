@@ -3,9 +3,9 @@
 NOOA 之上的递归多智能体组合库。Team 对外接受任务与上下文、交付业务结果；对内用 LLM 分配局部工作与材料，
 再由确定的 Python 算法协作。NOOA 提供对象描述、生成方法、模型调用、CodeAct、叶子类型校验及历史。
 
-当前已按 [Team 重构设计](docs/design/team-refactor.md)完成迁移，主体重构已通过技术复审；
-其后确认的测试补充已完成本地验证，代码与测试已按用户要求分次提交并推送。
-[唯一实施计划](docs/IMPLEMENTATION_PLAN.md#16-team-重构设计与迁移准备)记录授权、实际验证及历史交付。
+当前核心已按 [Team 重构设计](docs/design/team-refactor.md)完成并交付，主体重构通过技术复审。
+旧示例已移除，新的应用场景正在讨论，尚未实现。
+[唯一实施计划](docs/IMPLEMENTATION_PLAN.md)记录当前授权、实际验证及已交付基线。
 旧 Pattern Protocol、四个 Pattern 类和 Members 已删除。本库不提供新的 Agent 执行引擎或第三方 Pattern 接口。
 
 ## 使用
@@ -16,19 +16,20 @@ NOOA 之上的递归多智能体组合库。Team 对外接受任务与上下文�
 ```python
 from nooa_patterns import PatternKind, Team, as_member
 
-async def report_bridge(task, context):
-    """根据实际分析结果和分配的材料生成报告。"""
-    return await reporter.write(task, context)
+async def bridge(task, context):
+    """把团队分配的输入交给业务方法。"""
+    return await specialist.solve(task, context)
 
 team = Team(
-    {"analysis": analyst, "report": as_member(report_bridge)},
+    {"first": first_member, "second": as_member(bridge)},
     PatternKind.SEQUENTIAL,
     llm=client,  # NOOA UnifiedLLM 客户端或其支持的模型别名
 )
-result = await team.execute("分析方案并生成报告", {"documents": documents})
+result = await team.execute(task, context)
 ```
 
-`analyst`、`reporter` 和 `client` 由应用创建。稳定职责来自类 docstring；方法契约来自方法文档及注解；
+以上仅展示调用形式；`first_member`、`specialist`、`client` 及入口数据由应用提供。
+稳定职责来自类 docstring；方法契约来自方法文档及注解；
 本次交付要求来自 task/context，不需要 description/output_description 构造参数。
 `allocate` 自动描述直接成员，调用原生 standalone `@strategy(CodeActStrategy(), llm=...)` 函数并校验返回值。
 Team 普通方法本身不依赖 Agent 继承或私有 NOOA runtime。
@@ -142,27 +143,20 @@ CancelledError、KeyboardInterrupt、SystemExit 不包装；外层 asyncio.timeo
 不承诺同一 Team/成员并发安全，独立 Agent 实例更易隔离历史。普通 Team 不自动拥有完整组织树 span。
 调用者管理 Agent、客户端和连接生命周期；Team 不自动关闭、重置或持久化它们。
 
-## 示例与测试
+## 当前验证与示例状态
 
-示例均为确定性 fake，Team 子类覆盖 allocate 只用于演示，不代表生产存在第二个 planner 钩子。
-真实 standalone 分配与真实 Agent 调用由 FakeLLMClient 集成测试验证，不访问真实模型。
-复合模式仅在 examples/composites 提供，需要时复制修改，不进入公开 API；至少三个真实场景的稳定重复才可提议提升。
+`examples/` 当前为空。新的应用场景需先讨论确认，再编写实现；不沿用原有技术评审或复合模式演示。
+核心控制测试使用确定性分配；真实 standalone 分配与真实 Agent 调用由 FakeLLMClient 集成测试验证，
+不访问真实模型。应用层组合不进入库的公开接口。
 
 ```powershell
-.venv/Scripts/python.exe -X utf8 examples/manual_flows.py
-.venv/Scripts/python.exe -X utf8 examples/composed_flows.py
-.venv/Scripts/python.exe -X utf8 examples/technical_review.py
-.venv/Scripts/python.exe -X utf8 -m examples.composites.evaluator_optimizer
-.venv/Scripts/python.exe -X utf8 -m examples.composites.debate
 .venv/Scripts/python.exe -X utf8 -m pytest -p no:cacheprovider -q
 ```
 
-- [技术方案评审](examples/technical_review.py)：并发分析、按名聚合、路由审查、有界反馈，附手写对照。
-- [EvaluatorOptimizer](examples/composites/evaluator_optimizer.py)：Loop 包含一个 Sequential 轮次子 Team。
-- [Debate](examples/composites/debate.py)：Loop 包含 Parallel 提案子 Team 和普通裁决成员。
 - [原生分配测试](tests/test_nooa_allocation.py)：活对象引用、原方法描述、叶子模型输入筛选及生成取消。
+- [核心执行测试](tests/test_execution.py)：固定算法、局部上下文与递归结果交接。
 
 安装依赖使用 `uv sync --locked`。uv.lock 锁定 NOOA 0.0.11.dev433 / 1454b78c8f0a85c97eab1c6a91cc8cfc95b34de5。
 该版本在原生 Windows 因上游 fcntl 导入限制不能运行 NOOA；包导入与纯 Python 测试仍可运行。
 完整原生集成验收使用 Linux/WSL，无 skip。沙箱内 asyncio 阻塞时按平台机制提权，不修改测试来伪造通过。
-本次实际结果和命令只在[实施计划](docs/IMPLEMENTATION_PLAN.md#16-team-重构设计与迁移准备)维护。
+本次实际结果和命令只在[实施计划](docs/IMPLEMENTATION_PLAN.md)维护。
