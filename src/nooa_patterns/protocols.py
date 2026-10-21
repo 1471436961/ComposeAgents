@@ -4,66 +4,105 @@ from typing import Any, Protocol
 
 
 class TeamMember(Protocol):
-    """完整执行契约：叶子成员及 Team 提供 async execute(task, context)。
+    """Complete execution contract for leaves and Teams exposing async execute.
 
-    这是弱类型协议，兼容性由调用者和测试保证，不继承 NOOA 的类型校验契约。
-    通过适配器调用 NOOA 公开方法时，该方法原有校验仍生效。Any 仅限组合边界；
-    业务方法保留具体类型、能力说明和返回注解，签名统一不代表业务兼容。
+    This is a weakly typed protocol: callers and tests ensure compatibility.
+    It does not inherit NOOA's type-validation contract. When an adapter calls a
+    public NOOA method, that method's native validation still applies. Any is
+    limited to composition boundaries; business methods retain concrete types,
+    capability descriptions and return annotations. Matching signatures do not
+    imply compatible business inputs and outputs.
 
-    Team 只接受非空命名 dict，单成员合法。构造浅拷贝字典并保留成员引用；
-    members/pattern 只读，不支持增删或运行时替换。封闭 PatternKind 包含
-    SEQUENTIAL、PARALLEL、ROUTER、LOOP，不提供第三方 Pattern 协议。
+    Team accepts a nonempty dict of named members; a single member is valid.
+    Construction shallow-copies the dict, retaining order and member references.
+    Members and pattern are read-only: no additions, removals or runtime swaps.
+    The closed PatternKind enum contains SEQUENTIAL, PARALLEL, ROUTER and LOOP;
+    there is no third-party Pattern protocol.
 
-    每次 Team.execute 先调用一次 allocate。普通方法复用 NOOA doc 收集能力，
-    再调用独立 @strategy 生成函数，返回每个名称的 {task, context} 并校验结构。
-    不做隐式重分配或失败后全量材料回退。单独 allocate 是公开预览，不执行成员；
-    后续 execute 仍独立分配。原生生成可有多轮/重试。清晰文档影响质量但不保证正确。
+    Each Team.execute first calls allocate once. Ordinary methods reuse NOOA doc
+    to collect capabilities, then call a standalone @strategy generation function
+    and validate its mapping from names to {task, context}. There is no implicit
+    reallocation or fallback to all materials after failure. Calling allocate
+    separately is a public preview without member execution; a later execute
+    allocates independently. Native generation may use multiple turns/retries.
+    Clear documentation helps allocation quality but does not guarantee it.
 
-    成员收到自己的分配 task，不被前一结果覆盖。实际 context 是本次调用新字典：
-    materials 为分配所得 context，upstream 为直接前驱名称到结果的字典，feedback
-    为 Loop 上轮末结果的 {result: value} 或空字典。外层及运行时字典每次新建，
-    材料和结果保留活引用；不保证深层对象隔离，不复制/重置成员或业务对象。
-    无前驱与返回 None 通过键是否存在区分；库不累积全部上游历史。静态材料可
-    预先分配，尚未生成的动态产物由前驱业务结果显式携带给后继。
+    Each member receives its own assigned task, never the predecessor's result
+    as a replacement task. Each invocation gets a fresh context dict: materials
+    holds the allocated context, upstream maps the direct predecessor's name to
+    its result, and feedback contains {result: value} for the previous Loop
+    round's final result, or is empty. The outer and runtime dicts are fresh;
+    materials and results remain live references. There is no deep isolation,
+    copying or resetting of members or business objects. Key presence distinguishes
+    no predecessor from a predecessor returning None. Upstream history is not
+    accumulated. Static materials may be allocated ahead of time; predecessors
+    must explicitly carry newly produced artifacts in their business results.
 
-    SEQUENTIAL 按成员字典顺序等待并交接直接前驱，返回末结果。
-    PARALLEL 并发执行独立输入，upstream/feedback 为空；返回按成员顺序插入的
-    结果 dict，保留对象身份及 None，不摊平嵌套字典；单成员返回单项字典。
-    ROUTER 分配后调用一次同步 selector(task, context)，参数为 Team 入口对象。
-    非 str 抛 TypeError，未知名称抛 LookupError 并列出可用名称，无默认分支；
-    只执行选中成员的分配输入，原样返回其结果，未选成员不执行。
+    SEQUENTIAL awaits members in dict order, passing the direct predecessor's
+    result through upstream, and returns the final member's result.
+    PARALLEL executes independently assigned inputs concurrently with empty
+    upstream/feedback. It returns a dict in member order, preserving object
+    identity and None without flattening nested dicts; one member yields one item.
+    ROUTER calls a synchronous selector(task, context) once after allocation using
+    the Team's entry objects. A non-str result raises TypeError; an unknown name
+    raises LookupError listing available names, with no default branch. Only the
+    selected member executes its assigned inputs and its result is returned as-is.
 
-    LOOP 必须配置 until/max_iterations；上限只接受正整数，bool/非整数/未配置
-    抛 TypeError，零负数抛 ValueError。至少完整执行一轮，轮内同顺序算法；每轮
-    重置 upstream，后轮所有成员 feedback 只含上一轮末结果。分配 task 跨轮不变，
-    本 Team 不重新规划。轮末调用 until(last_result, entry_context)，严格返回 bool，
-    否则 TypeError。末轮 True 为成功，满上限仍 False 返回末结果。不自动转换反馈，
-    不写 loop_exhausted、不累积轮史、不提供 on_exhausted。应用每次新建 until 闭包
-    记录 rounds/last_ok，在正常返回后计算耗尽。selector/until 是同步纯业务判断，
-    不调用 LLM/I/O；异步判断放在业务成员内。
+    LOOP requires until/max_iterations. The limit must be a positive integer:
+    bool, non-integer or missing values raise TypeError; zero/negative values
+    raise ValueError. At least one complete sequential round runs. Each round
+    resets upstream; later rounds give every member feedback containing only
+    the previous round's final result. Assigned tasks remain unchanged across
+    rounds; this Team does not replan. After each full round it calls
+    until(last_result, entry_context), requiring bool or raising TypeError.
+    True on the final permitted round is normal termination; False at the limit
+    returns the last result. Feedback is not converted, history is not accumulated,
+    no loop_exhausted field is written and no on_exhausted hook is provided.
+    Applications may create a fresh until closure per invocation to observe
+    rounds/last_ok and compute exhaustion after normal return. Selector/until are
+    synchronous pure business decisions without LLM calls or I/O; asynchronous
+    decisions belong in business members.
 
-    入口 context 由调用者管理，可为任意对象。执行器不注入字段，不自动同步 NOOA
-    agent.context（提示词块 API）。局部字典修改不自动回写其他成员；共享材料的修改
-    可能可见，Parallel 并发安全归调用者。叶子须通过真实生成方法参数接收局部输入；
-    Python 有字典不保证模型已使用它。NOOA 块、历史及筛选可在叶子公开 API 配置，
-    不自动继承根材料，不把 scoped context 当树级隔离。
+    The caller owns the entry context, which may be any object. The executor
+    injects no fields and does not synchronize NOOA agent.context (the prompt
+    block API). Local dict changes are not written back to other members, while
+    mutations of shared materials may be visible. Parallel concurrency safety
+    belongs to the caller. Leaves must receive local inputs through their actual
+    generation-method parameters; a Python dict's existence does not prove model
+    use. NOOA blocks, history and filtering can be configured through public leaf
+    APIs. Root materials are not inherited automatically, and scoped context does
+    not provide organization-tree isolation.
 
-    分配描述、生成、结构校验的普通异常包装为 AllocationError，保存 team 和原始
-    __cause__；构造、成员、selector、until 错误不包装。子 Team 分配错误原样传播，
-    不误标父层。CancelledError/其他 BaseException 不包装；外层 asyncio.timeout
-    按原取消协议产生 TimeoutError，阶段分类不保证可重试。顺序/循环失败停止后续。
-    Parallel 观察到失败或成员取消，取消未完成兄弟并等待清理后传播原异常；外层
-    取消保持 CancelledError，清理异常不覆盖原异常，不分组、不返回部分结果；
-    二次外层取消仍可中断等待。取消协作式，只管理直接等待链，不接管后台任务，
-    快速失败不保证立即返回。不重试整个流程，NOOA 原生策略仍可重试。不回滚输入、
-    材料、Agent 状态或外部副作用；错误/取消不记耗尽。不内置超时、持久化或关闭。
+    Ordinary exceptions during allocation description, generation or structural
+    validation are wrapped in AllocationError, retaining team and the original
+    __cause__. Constructor, member, selector and until errors are not wrapped.
+    Child allocation errors propagate unchanged, preserving the child's identity.
+    CancelledError and other BaseExceptions are not wrapped. An outer
+    asyncio.timeout produces TimeoutError through normal cancellation semantics;
+    identifying the failure stage does not imply retryability. Sequential/Loop
+    failures stop later steps. Parallel cancels unfinished siblings after observing
+    a failure or member cancellation, waits for cleanup, then propagates the
+    original trigger. Outer cancellation remains CancelledError; cleanup errors
+    do not replace it. Errors are not grouped and partial results are not returned.
+    Repeated outer cancellation may interrupt cleanup. Cancellation is cooperative
+    and covers only directly awaited tasks, not independently spawned background
+    tasks; fail-fast does not guarantee immediate return. The workflow is not
+    retried, although native NOOA strategies may retry. Inputs, materials, Agent
+    state and external side effects are not rolled back. Errors/cancellation are
+    not exhaustion. There is no built-in timeout, persistence or resource shutdown.
 
-    叶子与 Team 都返回自身调用边界的业务结果，不要求同一类型/形状；None 是普通
-    结果，不是跳过或保留前值。下游需接受实际结果形状。子 Team 保留自身模式，每次
-    独立分配，包括外层 Loop 的每轮子调用。允许引用共享，不支持无限自调用，不做
-    完整图校验。普通 Team 不自动有全组织 span。分配、轮次、任务和结果属于调用
-    局部，固定配置留在实例。不承诺同一 Team/成员并发安全，独立 Agent 更易隔离历史。
-    调用者管理 Agent、模型客户端及连接生命周期。只用 NOOA 公开 API，不改其源码。
+    Leaves and Teams return business results at their own invocation boundary;
+    identical Python types, shapes or task granularity are not required. None is
+    an ordinary result, not a skip signal or an instruction to retain a prior value.
+    Downstream members must accept the actual result shape. Child Teams retain
+    their own pattern and allocate independently on every call, including each
+    round of an outer Loop. Reference sharing is allowed; infinite self-recursion
+    is unsupported and there is no full graph validator. A plain Team does not
+    automatically provide organization-wide spans. Allocation, round progress,
+    tasks and results are invocation-local; fixed configuration stays on instances.
+    Concurrent calls to the same Team/member are not guaranteed safe; separate
+    Agent instances simplify history isolation. Callers own Agent, model-client
+    and connection lifecycles. Only public NOOA APIs are used; NOOA is not modified.
     """
 
     async def execute(self, task: Any, context: Any) -> Any: ...

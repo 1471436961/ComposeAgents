@@ -76,7 +76,7 @@ class PatternKind(Enum):
 
 class AllocationError(Exception):
     def __init__(self, message: str, *, team: "Team") -> None: ...
-    # 保存 team；原始异常通过 raise ... from exc 保存在 __cause__ 中。
+    # Retain team; raise ... from exc preserves the original exception in __cause__.
 
 class Team:
     def __init__(
@@ -148,7 +148,7 @@ Team 内部构建有名称的直接成员描述，并提供自己的职责、输
 对外的 `Team.allocate` 只接受本次 task/context；它已能访问 members、pattern 及执行方法，无需调用者重复提供。
 
 ```python
-# Team 内部的普通方法；以下辅助方法名为实现示意。
+# An ordinary Team method; helper names below illustrate the implementation.
 async def allocate(self, task, context):
     try:
         member_descriptions = self._describe_members()
@@ -176,7 +176,7 @@ async def allocate(self, task, context):
 客户端或模型别名交给 NOOA 解析，使用原生 `@strategy` 和 `...` 方法体：
 
 ```python
-# 结构示意：由内部工厂绑定调用者提供的 llm。
+# Structural sketch: an internal factory binds the caller-supplied llm.
 @strategy(CodeActStrategy(), llm=llm)
 async def allocate_members(
     task: Any,
@@ -185,7 +185,7 @@ async def allocate_members(
     pattern_description: str,
     execution_contract: str,
 ) -> dict[str, dict[str, Any]]:
-    """为每位成员分配工作要求和相关材料，返回名称到 task/context 的映射。"""
+    """Assign work and relevant materials; return named task/context entries."""
     ...
 ```
 
@@ -255,8 +255,8 @@ assignments = await team.allocate(task, context)
 ```python
 local_context = {
     "materials": assignment["context"],
-    "upstream": {},  # 当前顺序链中直接前一成员的名称 → 实际结果
-    "feedback": {},  # Loop 非首轮时为 {"result": 上一轮末结果}
+    "upstream": {},  # {direct_predecessor_name: actual_result} in the current chain.
+    "feedback": {},  # {"result": previous_round_final_result} after the first Loop round.
 }
 await member.execute(assignment["task"], local_context)
 ```

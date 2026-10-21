@@ -5,7 +5,7 @@ NOOA 之上的递归多智能体组合库。Team 对外接受任务与上下文�
 
 当前核心已按 [Team 重构设计](docs/design/team-refactor.md)完成并交付，主体重构通过技术复审。
 已选择相对通用的 GPU 推理优化研发团队方向，首个业务输入为 [EdgeSeg-EfficientViT 项目需求](docs/requirements/edgeseg-efficientvit.md)。
-当前仅完成需求文档；团队与应用尚未实现，examples 保持为空。
+通用推理优化团队已在 `applications/inference_optimization/` 实现并通过离线验证；尚未调用真实模型或执行具体需求项目，examples 保持为空。
 [唯一实施计划](docs/IMPLEMENTATION_PLAN.md)记录当前授权、实际验证及已交付基线。
 旧 Pattern Protocol、四个 Pattern 类和 Members 已删除。本库不提供新的 Agent 执行引擎或第三方 Pattern 接口。
 
@@ -18,13 +18,13 @@ NOOA 之上的递归多智能体组合库。Team 对外接受任务与上下文�
 from nooa_patterns import PatternKind, Team, as_member
 
 async def bridge(task, context):
-    """把团队分配的输入交给业务方法。"""
+    """Pass the team's assigned inputs to the business method."""
     return await specialist.solve(task, context)
 
 team = Team(
     {"first": first_member, "second": as_member(bridge)},
     PatternKind.SEQUENTIAL,
-    llm=client,  # NOOA UnifiedLLM 客户端或其支持的模型别名
+    llm=client,  # A NOOA UnifiedLLM client or supported model alias.
 )
 result = await team.execute(task, context)
 ```
@@ -62,7 +62,7 @@ Team 构造只接受非空命名 dict，单成员合法。构造时浅拷贝，�
 生成方法一次调用可能包含原生多轮模型交互或重试，不等于一次供应商请求。
 
 ```python
-assignments = await team.allocate(task, context)  # 校验后返回，不执行成员
+assignments = await team.allocate(task, context)  # Validate and return without executing members.
 ```
 
 单独预览也消耗一次生成；后续 execute 会再次分配，两次可能不同。观察本次实际分配应在该次 allocate 返回点记录或调试。
@@ -75,8 +75,8 @@ assignments = await team.allocate(task, context)  # 校验后返回，不执行�
 ```python
 {
     "materials": assignment["context"],
-    "upstream": {},  # 有前驱时为 {直接前驱名称: 实际结果}
-    "feedback": {},  # Loop 后续轮为 {"result": 上轮末结果}
+    "upstream": {},  # {direct_predecessor_name: actual_result}, if present.
+    "feedback": {},  # {"result": previous_round_final_result} in later Loop rounds.
 }
 ```
 
@@ -146,7 +146,7 @@ CancelledError、KeyboardInterrupt、SystemExit 不包装；外层 asyncio.timeo
 
 ## 当前验证与示例状态
 
-`examples/` 当前为空。领域团队与应用的实现需要后续授权，不沿用原有技术评审或复合模式演示。
+`examples/` 当前为空。领域团队作为独立应用组合，不沿用原有技术评审或复合模式演示。
 核心控制测试使用确定性分配；真实 standalone 分配与真实 Agent 调用由 FakeLLMClient 集成测试验证，
 不访问真实模型。应用层组合不进入库的公开接口。
 
@@ -161,3 +161,48 @@ CancelledError、KeyboardInterrupt、SystemExit 不包装；外层 asyncio.timeo
 该版本在原生 Windows 因上游 fcntl 导入限制不能运行 NOOA；包导入与纯 Python 测试仍可运行。
 完整原生集成验收使用 Linux/WSL，无 skip。沙箱内 asyncio 阻塞时按平台机制提权，不修改测试来伪造通过。
 本次实际结果和命令只在[实施计划](docs/IMPLEMENTATION_PLAN.md)维护。
+
+## 通用推理优化团队
+
+[应用入口](applications/inference_optimization/team.py)使用现有 Team 构建以下组织，不新增核心 API：
+
+```text
+InferenceOptimizationTeam (LOOP，有界)
+  investigate (PARALLEL，每轮独立分配)
+    model: 模型/计算图分析
+    runtime: 运行环境/性能分析
+  plan: 选择一个有明确验证条件的实验
+  implement: 修改代码、构建与记录命令证据
+  verify: 独立运行检查，accepted / revise / blocked
+```
+
+各叶子是实际 NOOA Agent，工作方法由原生 CodeAct 驱动；父子 Team 均使用原生 LLM 分配。
+业务对象传递实际调查、计划、变更和验证记录，不要求模型复述上游结果。
+revise 进入下一轮，accepted/blocked 停止，满轮次仍需修改时应用返回 exhausted；失败和取消直接传播。
+业务职责不绑定模型、运行时、硬件或特定优化技术，不自动安装依赖、下载数据或改变系统配置。
+
+先准备独立工作区、模型访问与预算，再在 Linux/WSL 显式运行。例如：
+
+```bash
+python -m applications.inference_optimization \
+  --requirements /path/to/requirements.md \
+  --workspace /path/to/isolated-project \
+  --model 'your-configured-model' --max-rounds 3 --timeout 900
+```
+
+`--context environment.json` 可提供环境、工具路径、允许的资源与约束；不得写入密钥。
+凭据通过 NOOA 支持的环境配置提供。也可在 Python 中使用 `build_team(workspace, llm=client, max_rounds=3)`，
+可选 `role_llms` 为不同职责选择不同客户端；调用者管理全部客户端，Workspace 使用异步上下文管理器关闭 ShellTools。
+代码在仓库根以模块方式运行；应用没有打包进 `nooa_patterns` 的公开接口。
+
+[工作区工具](applications/inference_optimization/workspace.py)复用 NOOA ShellTools，记录命令、stdin、完整 stdout/stderr 和耗时，
+结果写入工作区 `.inference_team/<run-id>/result.json`。命令共享锁，避免本应用内部的构建、剖析和 GPU 测量重叠；
+无法排除其他进程占用。验证者必须引用本次独立执行的真实命令才能报告 accepted，但这不自动证明检查充分或指标正确。
+Evidence 根目录和当前 run 目录拒绝符号链接/junction 重定向，内部写入统一检查目标路径。
+文件工具只允许读取、浏览当前 run 的证据，路径别名按实际目标检查；旧运行记录保留供外部审计，不自动删除或作为成员输入。
+
+文件工具检查工作区边界；任意 shell 和 NOOA 默认进程内 CodeAct **不是 OS 沙箱**。
+这些路径检查不能阻止任意 shell/CodeAct 绕过，也不保证抵御恶意并发替换路径。
+请由调用者提供容器/VM 等隔离与获准的执行环境；Windows 可执行文件可通过 WSL 调用，跨系统进程取消仍需单独验证。
+总超时、角色模型轮数和命令超时是等待上限，不是货币预算或硬性模型调用次数上限。
+本轮只用公开 FakeLLMClient、临时工作区和真实文件/命令验证控制流；不宣称真实研究质量、模型成本或项目完成。
