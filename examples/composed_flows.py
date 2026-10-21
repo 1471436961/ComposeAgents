@@ -1,8 +1,12 @@
-"""The two baselines composed with Team, Sequential and explicit adaptation."""
+"""Two business baselines with named tasks and local input bridges.
+
+The example Team overrides allocate with scripted fixtures, so this demo never
+calls a model. Production Team.allocate uses native NOOA generation instead.
+"""
 
 import asyncio
 
-from nooa_patterns import Sequential, Team, as_member
+from nooa_patterns import PatternKind, Team, as_member
 
 if __package__:
     from . import manual_flows as flows
@@ -10,20 +14,32 @@ else:
     import manual_flows as flows
 
 
+class _Pipeline(Team):
+    async def allocate(self, task, context):
+        first, second = self.members
+        return {
+            first: {"task": f"Perform {first}", "context": {"input": task, "application": context}},
+            second: {"task": f"Perform {second} using the predecessor's result", "context": context},
+        }
+
+
+def build_pipeline(first_name, first_fn, second_name, second_fn):
+    async def first(task, context):
+        """Process the explicitly allocated input material."""
+        return await first_fn(context["materials"]["input"], context["materials"]["application"])
+    async def second(task, context):
+        """Use the actual direct predecessor's business result."""
+        return await second_fn(context["upstream"][first_name], context["materials"])
+    return _Pipeline({first_name: as_member(first), second_name: as_member(second)},
+        PatternKind.SEQUENTIAL, llm=None)
+
+
 async def composed_a(task: str, context: flows.ResearchContext) -> str:
-    team = Team(
-        members=[as_member(flows.fake_analyze), as_member(flows.fake_write_report)],
-        pattern=Sequential(),
-    )
-    return await team.execute(task, context)
+    return await build_pipeline("analyze", flows.fake_analyze, "report", flows.fake_write_report).execute(task, context)
 
 
 async def composed_b(task: str, context: flows.ChangeContext) -> flows.ReviewOpinion:
-    team = Team(
-        members=[as_member(flows.fake_plan), as_member(flows.fake_review)],
-        pattern=Sequential(),
-    )
-    return await team.execute(task, context)
+    return await build_pipeline("plan", flows.fake_plan, "review", flows.fake_review).execute(task, context)
 
 
 async def main() -> None:

@@ -1,4 +1,4 @@
-"""Copyable fake Debate: Team([parallel_proposals, adjudicate], Loop(...)).
+"""Copyable fake Debate: a LOOP Team contains parallel proposals and a judge.
 
 Run with python -m examples.composites.debate, or by file path.
 Later proposals read previous opponents' claims and the judge's feedback.
@@ -12,7 +12,7 @@ from collections import Counter
 from collections.abc import Callable
 from dataclasses import dataclass, field
 
-from nooa_patterns import Loop, Parallel, Team, as_member
+from nooa_patterns import PatternKind, Team, as_member
 
 
 @dataclass(frozen=True)
@@ -86,11 +86,36 @@ def make_advocates(*, responds: bool = True) -> list[FakeAdvocate]:
             FakeAdvocate("reliability", "先明确失效策略，避免陈旧数据。", responds=responds)]
 
 
+class _Proposals(Team):
+    async def allocate(self, task, context):
+        state = context["feedback"].get("result", context["materials"]["initial"])
+        app = context["materials"]["application"]
+        return {name: {"task": f"Present {name}'s argument and respond to prior feedback",
+            "context": {"state": state, "application": app}} for name in self.members}
+
+
+class _Debate(Team):
+    async def allocate(self, task, context):
+        return {
+            "proposals": {"task": "Obtain independent arguments", "context": {"initial": task, "application": context}},
+            "judge": {"task": "Adjudicate the actual named arguments", "context": context},
+        }
+
+
 def build_team(
     advocates: list[FakeAdvocate], until: Callable[[State, Context], bool], *, max_iterations: int
 ) -> Team:
-    proposals = Team(advocates, Parallel())
-    return Team([proposals, as_member(adjudicate)], Loop(until, max_iterations=max_iterations))
+    def bridge(advocate):
+        async def propose(task, context):
+            return await advocate.execute(context["materials"]["state"], context["materials"]["application"])
+        return as_member(propose)
+    proposals = _Proposals({a.name: bridge(a) for a in advocates}, PatternKind.PARALLEL, llm=None)
+    async def judge(task, context):
+        named = context["upstream"]["proposals"]
+        # Explicit application conversion, not implicit flattening by Team.
+        return await adjudicate([named[a.name] for a in advocates], context["materials"])
+    return _Debate({"proposals": proposals, "judge": as_member(judge)}, PatternKind.LOOP,
+        llm=None, until=until, max_iterations=max_iterations)
 
 
 async def composed(

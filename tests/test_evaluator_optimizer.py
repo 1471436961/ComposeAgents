@@ -5,7 +5,7 @@ import asyncio
 import pytest
 
 from examples.composites import evaluator_optimizer as flow
-from nooa_patterns import Sequential
+from nooa_patterns import PatternKind
 
 
 @pytest.mark.parametrize(
@@ -49,8 +49,8 @@ def test_sequential_round_explicitly_closes_the_type_cycle_and_uses_feedback() -
     generator, context = flow.FakeGenerator(), flow.Context()
     task = flow.Request("说明", ("先验证", "再部署"), feedback=("再部署", "先验证"))
     round_team = flow.build_round(generator)
-    assert isinstance(round_team.pattern, Sequential)
-    assert round_team.members[0] is generator
+    assert round_team.pattern is PatternKind.SEQUENTIAL
+    assert list(round_team.members) == ["generate", "evaluate", "feedback"]
     result = asyncio.run(round_team.execute(task, context))
     assert isinstance(result, flow.Request)
     assert result.text == "再部署"  # Critic-specified order wins over required order.

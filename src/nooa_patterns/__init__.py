@@ -1,11 +1,10 @@
-"""Public protocols and lightweight recursive collaboration primitives."""
+"""Named recursive Teams, semantic allocation and four fixed collaborations."""
 
 from .adapters import as_member
-from .members import Members
-from .patterns import Loop, Parallel, Router, Sequential
-from .protocols import Pattern, TeamMember
-from .team import Team
+from .pattern_kind import PatternKind
+from .protocols import TeamMember
+from .team import AllocationError, Team
 
 __all__ = [
-    "Loop", "Members", "Parallel", "Pattern", "Router", "Sequential", "Team", "TeamMember", "as_member"
+    "AllocationError", "PatternKind", "Team", "TeamMember", "as_member"
 ]

@@ -1,145 +1,69 @@
-"""弱类型协作边界；仅定义协议，不实现编排或 NOOA 执行机制。"""
+"""The weak structural boundary shared by leaves and recursive Teams."""
 
-from typing import Any, ClassVar, Protocol
-
-from .members import Members
+from typing import Any, Protocol
 
 
 class TeamMember(Protocol):
-    """叶子成员与 Team 共同遵守的执行契约 v0。
+    """完整执行契约：叶子成员及 Team 提供 async execute(task, context)。
 
-    类型边界：这是弱类型协议，兼容性由调用者和测试保证，不继承 NOOA 的类型校验契约。
-    通过适配器调用 NOOA 公开方法时，该方法原有校验仍生效。
-    本协议不检查跨成员类型兼容性，不推导、转换类型，也不验证完整签名或业务语义。
-    业务函数应继续使用具体类型；这里的 Any 只表示组合边界暂未强制类型兼容。
+    这是弱类型协议，兼容性由调用者和测试保证，不继承 NOOA 的类型校验契约。
+    通过适配器调用 NOOA 公开方法时，该方法原有校验仍生效。Any 仅限组合边界；
+    业务方法保留具体类型、能力说明和返回注解，签名统一不代表业务兼容。
 
-    task 是此次调用的业务输入。Sequential 中 r₀ = task，
-    rᵢ = await memberᵢ.execute(rᵢ₋₁, context)，返回 rₙ。
-    第一成员接收入口的原始 task，之后逐级接收前一结果。
-    原始指入口收到的对象，不表示不可变快照。库不序列化、复制或转换输入。
-    成员可以修改可变输入；返回值、输入与 context 内对象可以互为别名。
-    后续成员需要原始任务时，由调用者显式提供；保存引用不会创建快照。
-    Parallel 中所有成员并发接收入口的同一个 task 和 context，而非前一成员结果。
-    按成员顺序返回新 list；元素是原业务结果，保留 None、嵌套列表和对象身份，不展开。
-    该列表本身是此次 Team 调用的聚合业务结果，下游须能接收该形状。
+    Team 只接受非空命名 dict，单成员合法。构造浅拷贝字典并保留成员引用；
+    members/pattern 只读，不支持增删或运行时替换。封闭 PatternKind 包含
+    SEQUENTIAL、PARALLEL、ROUTER、LOOP，不提供第三方 Pattern 协议。
 
-    Loop(until, *, max_iterations) 的成员由 Team 持有，不要求命名；映射成员仍按顺序执行。
-    max_iterations 必须显式给出正整数，非整数或 bool 抛 TypeError，零或负数抛 ValueError。
-    首轮接收入口 task，之后接收上一轮末结果；每轮完整执行全部成员后判断一次 until，至少一轮。
-    until 应是纯函数式同步判断，不应调用 LLM 或做 I/O；模型判断由本轮异步成员完成。
-    until 返回必须是 bool，否则 TypeError，不进行隐式真值转换。None 仍作为普通结果参与判断和反馈。
-    最后一轮 until 为 True 是正常终止；满上限仍 False 时返回末结果，不抛耗尽异常或包装状态。
-    跨轮类型兼容由应用负责，推荐显式加入末尾反馈转换成员；库没有 feedback_adapter，也不自动转换。
+    每次 Team.execute 先调用一次 allocate。普通方法复用 NOOA doc 收集能力，
+    再调用独立 @strategy 生成函数，返回每个名称的 {task, context} 并校验结构。
+    不做隐式重分配或失败后全量材料回退。单独 allocate 是公开预览，不执行成员；
+    后续 execute 仍独立分配。原生生成可有多轮/重试。清晰文档影响质量但不保证正确。
 
-    context 是调用者创建、持有和管理的任意应用级对象。
-    所有成员收到同一个引用，修改彼此可见。库不复制、不持久化，
-    不注入 last_result、history 或原始任务；成员和显式适配函数可以主动修改它。
-    它与 NOOA agent.context（提示词上下文）无关，不自动同步。
-    Parallel 不保护 task/context 的并发读写，调用者负责并发安全；同一成员的重入也由调用者负责。
-    Loop 也不自动写 loop_exhausted 或任何其他字段，不累积历史，不提供 on_exhausted 回调。
-    耗尽属于应用语义，固定字段在嵌套 / 重复调用中没有通用的覆盖和清除规则。
-    应用可每次新建 until 观察闭包记录 rounds、last_ok，正常返回后计算
-    exhausted = (rounds == max_iterations and not last_ok)；闭包属于应用，不跨独立并发运行共享。
-    观察计数不改变纯业务判定；异常 / 取消直接传播，不执行正常返回后的耗尽计算。
+    成员收到自己的分配 task，不被前一结果覆盖。实际 context 是本次调用新字典：
+    materials 为分配所得 context，upstream 为直接前驱名称到结果的字典，feedback
+    为 Loop 上轮末结果的 {result: value} 或空字典。外层及运行时字典每次新建，
+    材料和结果保留活引用；不保证深层对象隔离，不复制/重置成员或业务对象。
+    无前驱与返回 None 通过键是否存在区分；库不累积全部上游历史。静态材料可
+    预先分配，尚未生成的动态产物由前驱业务结果显式携带给后继。
 
-    叶子与 Team 都返回自身此次调用的业务结果，处于同一成员调用边界，
-    不要求相同 Python 类型、数据形状或任务粒度。Pattern 决定业务结果如何产生，
-    Team 直接返回该结果，不额外包装统一执行状态对象。
-    子 Team 的输出须匹配外层后续成员的输入；统一签名不保证业务兼容。
-    None 是普通结果：Sequential 逐级原样传递，Parallel 保留结果列表中的对应元素。
-    它不表示跳过、提前结束或保留上一结果。
-    只修改 context 且希望继续传递输入的成员应显式 return task。
+    SEQUENTIAL 按成员字典顺序等待并交接直接前驱，返回末结果。
+    PARALLEL 并发执行独立输入，upstream/feedback 为空；返回按成员顺序插入的
+    结果 dict，保留对象身份及 None，不摊平嵌套字典；单成员返回单项字典。
+    ROUTER 分配后调用一次同步 selector(task, context)，参数为 Team 入口对象。
+    非 str 抛 TypeError，未知名称抛 LookupError 并列出可用名称，无默认分支；
+    只执行选中成员的分配输入，原样返回其结果，未选成员不执行。
 
-    异常与 CancelledError 直接传播，不吞掉或包装异常；Sequential 不启动后续成员。
-    Parallel 在首个失败被观察到后取消未完成兄弟任务，等待全部直接子任务结束后传播原异常。
-    同时失败不保证按成员顺序选择异常；取消清理异常被取走但不覆盖原业务异常。
-    外层或单个成员取消会中止 Parallel 汇集，取消其他未完成任务并等待结束。
-    外层取消保持 CancelledError，即使成员的取消清理抛错；成员吞掉取消也不把整次调用改成成功。
-    已经完成的成员不会被追溯取消；只管理等待链，不接管成员自行创建的后台任务。
-    快速失败指及时请求取消，不承诺立即返回；取消清理可能等待，额外的外层取消仍可传播。
-    库不重试整个流程；成员或 NOOA 策略自身的重试仍按原机制执行。
-    Loop 中成员失败即停止当前轮，until 失败时不进入下一轮，原异常 / 取消直接传播，不记为耗尽。
-    失败或取消不回滚 context、输入、Agent 状态及已经发生的外部副作用。
-    库不能强制中断阻塞或屏蔽取消的成员，仅管理直接等待的调用链。
-    首版不内置超时；调用者可在外层或显式适配函数中限制等待时间。
-    底层自己的超时仍有效，超时也不保证立即停止或撤销副作用。
+    LOOP 必须配置 until/max_iterations；上限只接受正整数，bool/非整数/未配置
+    抛 TypeError，零负数抛 ValueError。至少完整执行一轮，轮内同顺序算法；每轮
+    重置 upstream，后轮所有成员 feedback 只含上一轮末结果。分配 task 跨轮不变，
+    本 Team 不重新规划。轮末调用 until(last_result, entry_context)，严格返回 bool，
+    否则 TypeError。末轮 True 为成功，满上限仍 False 返回末结果。不自动转换反馈，
+    不写 loop_exhausted、不累积轮史、不提供 on_exhausted。应用每次新建 until 闭包
+    记录 rounds/last_ok，在正常返回后计算耗尽。selector/until 是同步纯业务判断，
+    不调用 LLM/I/O；异步判断放在业务成员内。
 
-    Pattern 必须无执行状态并可跨 Team 复用；当前输入、进度、临时结果与异常
-    只能属于此次调用，不能保存在 Pattern 字段或其他共享可变存储中。
-    固定配置与可变执行状态应区分；Sequential、Parallel 不需要配置字段。
-    本协议不能自动证明第三方 Pattern 遵守无状态约定。
+    入口 context 由调用者管理，可为任意对象。执行器不注入字段，不自动同步 NOOA
+    agent.context（提示词块 API）。局部字典修改不自动回写其他成员；共享材料的修改
+    可能可见，Parallel 并发安全归调用者。叶子须通过真实生成方法参数接收局部输入；
+    Python 有字典不保证模型已使用它。NOOA 块、历史及筛选可在叶子公开 API 配置，
+    不自动继承根材料，不把 scoped context 当树级隔离。
 
-    Team 接受成员序列或字符串名称映射，构造时取浅快照并统一保存为只读 Members。
-    Members 迭代成员而不是名称，保留顺序、名称和成员引用，支持整数或名称访问及 has_name。
-    原始 list/dict 的修改不改变 Team，不复制、不重置成员，没有动态增删接口。
-    requires_named_members 是 Pattern 的固定类声明，默认 False；Router 为 True。
-    Team 构造时拒绝把非 Mapping 交给要求命名的 Pattern，不靠运行时猜测业务语义。
-    多个 Team 共享成员时仍是同一个有状态实例；重复执行不会自动创建干净会话。
-    首版不承诺同一 Team 并发调用安全；Pattern 无状态不保证成员或 context 并发安全。
-    空 Team 在构造时抛出 ValueError；Pattern 的成员序列前提为非空。
-    单成员 Sequential 原样返回该成员的结果；单成员 Parallel 返回单元素列表。
-    直接 Parallel.run 也对空成员抛 ValueError，不改变 Sequential 对直接空序列不作保证的边界。
-    直接 Loop.run 也对空成员抛 ValueError；max_iterations 限制轮数，不保证总耗时。
+    分配描述、生成、结构校验的普通异常包装为 AllocationError，保存 team 和原始
+    __cause__；构造、成员、selector、until 错误不包装。子 Team 分配错误原样传播，
+    不误标父层。CancelledError/其他 BaseException 不包装；外层 asyncio.timeout
+    按原取消协议产生 TimeoutError，阶段分类不保证可重试。顺序/循环失败停止后续。
+    Parallel 观察到失败或成员取消，取消未完成兄弟并等待清理后传播原异常；外层
+    取消保持 CancelledError，清理异常不覆盖原异常，不分组、不返回部分结果；
+    二次外层取消仍可中断等待。取消协作式，只管理直接等待链，不接管后台任务，
+    快速失败不保证立即返回。不重试整个流程，NOOA 原生策略仍可重试。不回滚输入、
+    材料、Agent 状态或外部副作用；错误/取消不记耗尽。不内置超时、持久化或关闭。
 
-    Router 的 selector 是 Callable[[Any, Any], str]，每次同步调用一次，选择一个名称。
-    selector 应是纯函数式的同步决策，不应调用 LLM 或做 I/O；模型决策应由前置异步成员完成，
-    selector 只读其产物。库不推断或兼容异步 selector；非字符串返回值抛 TypeError。
-    未命中抛 LookupError，消息包含返回名称和有序可用名称列表；selector 异常原样传播。
-    被选成员收到同一个 task/context，其结果原样返回，包括 None；其他成员不执行。
-    Router 不注入 context、包装结果、重试或回滚，取消传到被选成员；选中子 Team 保留自身 Pattern。
-
-    允许嵌套与成员复用；子 Team 保留自己的 Pattern，不扁平化。
-    不支持直接或间接自调用造成无限递归，首版没有完整图校验器。
-    调用者管理 Agent、模型客户端和连接等资源；Team 不关闭、重置或持久化它们。
-
-    已满足本契约的 execute 可直接参与；其他 NOOA 异步方法通过显式函数桥接。
-    适配器只转交调用，不根据名称或签名猜测业务映射，不自动复制底层文档与签名。
-    普通 Python 对象不会自动获得 NOOA span 或完整组织树的 doc(self) 展开；
-    NOOA 叶子公开方法仍经过原生调用链。
+    叶子与 Team 都返回自身调用边界的业务结果，不要求同一类型/形状；None 是普通
+    结果，不是跳过或保留前值。下游需接受实际结果形状。子 Team 保留自身模式，每次
+    独立分配，包括外层 Loop 的每轮子调用。允许引用共享，不支持无限自调用，不做
+    完整图校验。普通 Team 不自动有全组织 span。分配、轮次、任务和结果属于调用
+    局部，固定配置留在实例。不承诺同一 Team/成员并发安全，独立 Agent 更易隔离历史。
+    调用者管理 Agent、模型客户端及连接生命周期。只用 NOOA 公开 API，不改其源码。
     """
 
-    async def execute(self, task: Any, context: Any) -> Any:
-        """完成当前业务输入，返回此次调用的业务结果，遵守上述引用与失败语义。"""
-        ...
-
-
-class Pattern(Protocol):
-    """成员间的协作协议，复用 TeamMember 契约中的数据、引用与失败语义。
-
-    本协议提供 run，不是 TeamMember 的子类型；仅实现 run 不满足成员的 execute 协议。
-    Team 的 execute 委托 run 并直接返回业务结果，Pattern 自身不因此成为 Team 成员。
-
-    Pattern 必须无执行状态并可复用。同一 Sequential、Parallel、Router 或 Loop 可被多个 Team 共享。
-    当前输入、进度、临时结果、异常不得保存到实例字段或其他共享可变存储。
-    固定配置应与执行状态区分；Router 保存 selector，Loop 保存 until / max_iterations。
-    本次选择、轮次和结果只在调用局部变量中；库不重置应用的闭包或成员状态。
-    无状态是实现者的约定，Protocol 不会自动验证它。
-
-    members 是非空 Members，保存构造时的浅快照，按原顺序迭代成员并保留成员引用。
-    requires_named_members 是固定类声明，默认 False；Router 声明 True。
-    Team 构造时对要求命名但输入非 Mapping 的配置抛 ValueError。
-    Protocol 默认值不会自动赋给结构类型；Team 将未声明属性的旧自定义 Pattern 按 False 处理。
-    task 与 context 按 TeamMember 的契约传递，不由库复制、转换或注入额外字段。
-    返回此次协作的业务结果，Team 原样返回它；None 也是普通业务结果。
-    异常和取消直接传播，不重试整个流程、不回滚副作用，不内置超时或管理资源。
-    子 Team 保留自己的 Pattern；不支持无限递归，也不承诺同一 Team 并发安全。
-    Parallel 共享入口 task/context，按成员顺序返回业务结果 list；失败或取消时取消并等待
-    未完成兄弟任务，传播原失败或 CancelledError。并发修改与成员重入安全属于调用者。
-    Router 用同步 selector 选一个名称，按 TeamMember 中的完整路由契约调用一个成员；
-    直接 run 也要求非空命名 Members，不改变 Team 构造时提前检查的职责。
-    Loop 遵守 TeamMember 中的完整循环契约，逐轮执行 Sequential，再检查同步 bool 判断；
-    末结果原样反馈，不自动转换、写 context 或添加记录回调，耗尽由应用观察。
-
-    Pattern 控制成员之间的协作，NOOA Strategy 控制单个生成方法的执行。
-    """
-
-    requires_named_members: ClassVar[bool] = False
-
-    async def run(
-        self,
-        members: Members,
-        task: Any,
-        context: Any,
-    ) -> Any:
-        """在非空成员序列上执行协作，返回该调用的业务结果。"""
-        ...
+    async def execute(self, task: Any, context: Any) -> Any: ...

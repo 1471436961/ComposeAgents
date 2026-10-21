@@ -8,7 +8,7 @@ The deterministic writer adds one requested item per round; no LLM is called.
 import asyncio
 from dataclasses import dataclass, field
 
-from nooa_patterns import Loop, Sequential, Team, as_member
+from nooa_patterns import PatternKind, Team, as_member
 
 
 @dataclass(frozen=True)
@@ -77,8 +77,37 @@ async def feedback(evaluation: Evaluation, context: Context) -> Request:
     return Request(original.goal, original.required, evaluation.draft.text, evaluation.missing)
 
 
+class _Round(Team):
+    """Scripted allocation for a round; business types stay in explicit bridges."""
+
+    async def allocate(self, task, context):
+        if isinstance(task, Request):
+            request, app = task, context
+        else:
+            request = context["feedback"].get("result", context["materials"]["initial"])
+            app = context["materials"]["application"]
+        return {
+            "generate": {"task": "Improve the draft using feedback", "context": {"request": request, "application": app}},
+            "evaluate": {"task": "Evaluate the actual new draft", "context": app},
+            "feedback": {"task": "Carry evaluation and draft forward", "context": app},
+        }
+
+
+class _Optimizer(Team):
+    async def allocate(self, task, context):
+        return {"round": {"task": "Generate, evaluate, and prepare feedback", "context": {
+            "initial": task, "application": context}}}
+
+
 def build_round(generator: FakeGenerator) -> Team:
-    return Team([generator, as_member(evaluate), as_member(feedback)], Sequential())
+    async def generate_step(task, context):
+        return await generator.execute(context["materials"]["request"], context["materials"]["application"])
+    async def evaluate_step(task, context):
+        return await evaluate(context["upstream"]["generate"], context["materials"])
+    async def feedback_step(task, context):
+        return await feedback(context["upstream"]["evaluate"], context["materials"])
+    return _Round({"generate": as_member(generate_step), "evaluate": as_member(evaluate_step),
+        "feedback": as_member(feedback_step)}, PatternKind.SEQUENTIAL, llm=None)
 
 
 async def composed(
@@ -92,7 +121,8 @@ async def composed(
         accepted = not result.feedback
         return accepted
 
-    team = Team([build_round(generator)], Loop(until, max_iterations=max_iterations))
+    team = _Optimizer({"round": build_round(generator)}, PatternKind.LOOP, llm=None,
+        until=until, max_iterations=max_iterations)
     result = await team.execute(task, context)
     return Outcome(result, rounds, accepted, rounds == max_iterations and not accepted)
 

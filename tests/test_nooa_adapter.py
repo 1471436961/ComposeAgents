@@ -24,7 +24,8 @@ from nooa.tracing import enable_tracing
 from nooa.unifiedllm import FakeLLMClient
 from pydantic import BaseModel, Field, ValidationError
 
-from nooa_patterns import Sequential, Team, as_member
+from nooa_patterns import PatternKind, as_member
+from conftest import ScriptedTeam
 
 
 class ScoreCard(BaseModel):
@@ -76,11 +77,11 @@ async def _invoke(
     if not adapted:
         return await agent.score(task)
 
-    async def score_bridge(value: str, shared: list[str]) -> ScoreCard:
-        shared.append("score")
+    async def score_bridge(value: str, local: dict) -> ScoreCard:
+        local["materials"].append("score")
         return await agent.score(value)
 
-    team = Team(members=[as_member(score_bridge)], pattern=Sequential())
+    team = ScriptedTeam({"score": as_member(score_bridge)}, PatternKind.SEQUENTIAL)
     return await team.execute(task, context)
 
 
